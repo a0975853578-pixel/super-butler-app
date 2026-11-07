@@ -272,39 +272,40 @@ function sortKey(it) {
 }
 
 /* ---------- 登入 ---------- */
-/** 取得還有效的登入憑證；過期就重新登入（在 LINE 外面、例如桌面圖示打開時會發生） */
-function freshToken() {
-  const dec = liff.getDecodedIDToken();
-  if (dec && dec.exp * 1000 > Date.now() + 60000) {
+/** 登入憑證（約 30 天有效）；沒有的話重新登入 */
+function accessToken() {
+  const t = liff.getAccessToken();
+  if (t) {
     try { sessionStorage.removeItem('relogin'); } catch (e) {}
-    return liff.getIDToken();
+    return t;
   }
-  relogin();
-  throw new Error('登入更新中，請稍候…');
+  relogin(false);
+  throw new Error('登入中，請稍候…');
 }
-function relogin() {
+/** 重新登入；hard=true 代表憑證被 LINE 拒絕，要先清掉舊的 */
+function relogin(hard) {
   let tried = false;
   try { tried = sessionStorage.getItem('relogin') === '1'; sessionStorage.setItem('relogin', '1'); } catch (e) {}
   if (tried) throw new Error('登入失敗，請關掉 App 重新打開');
   if (liff.isInClient()) {
     location.reload();
-  } else {
-    if (liff.isLoggedIn()) liff.logout();
-    liff.login({ redirectUri: location.origin + location.pathname });
+    return;
   }
+  if (hard && liff.isLoggedIn()) liff.logout();
+  liff.login({ redirectUri: location.origin + location.pathname });
 }
 
 /* ---------- 和後端溝通 ---------- */
 async function api(action, params) {
   if (DEMO) return demoApi(action, params || {});
-  const token = freshToken();
+  const token = accessToken();
   const res = await fetch(CONFIG.API_URL, {
     method: 'POST',
-    body: JSON.stringify({ action, params: params || {}, idToken: token })
+    body: JSON.stringify({ action, params: params || {}, accessToken: token })
   });
   const j = await res.json();
   if (!j.ok) {
-    if (/登入已過期/.test(j.error || '')) { relogin(); throw new Error('登入更新中，請稍候…'); }
+    if (/登入已過期/.test(j.error || '')) { relogin(true); throw new Error('登入更新中，請稍候…'); }
     throw new Error(j.error || '發生錯誤');
   }
   return j.data;
