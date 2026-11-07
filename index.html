@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>超級管家</title>
+<!-- 安裝到手機桌面用：圖示、全螢幕 -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#F7F3EA">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="超級管家">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -262,16 +271,42 @@ function sortKey(it) {
   return (it.times[0] || '') + it.content;
 }
 
+/* ---------- 登入 ---------- */
+/** 取得還有效的登入憑證；過期就重新登入（在 LINE 外面、例如桌面圖示打開時會發生） */
+function freshToken() {
+  const dec = liff.getDecodedIDToken();
+  if (dec && dec.exp * 1000 > Date.now() + 60000) {
+    try { sessionStorage.removeItem('relogin'); } catch (e) {}
+    return liff.getIDToken();
+  }
+  relogin();
+  throw new Error('登入更新中，請稍候…');
+}
+function relogin() {
+  let tried = false;
+  try { tried = sessionStorage.getItem('relogin') === '1'; sessionStorage.setItem('relogin', '1'); } catch (e) {}
+  if (tried) throw new Error('登入失敗，請關掉 App 重新打開');
+  if (liff.isInClient()) {
+    location.reload();
+  } else {
+    if (liff.isLoggedIn()) liff.logout();
+    liff.login({ redirectUri: location.origin + location.pathname });
+  }
+}
+
 /* ---------- 和後端溝通 ---------- */
 async function api(action, params) {
   if (DEMO) return demoApi(action, params || {});
-  let token = liff.getIDToken();
+  const token = freshToken();
   const res = await fetch(CONFIG.API_URL, {
     method: 'POST',
     body: JSON.stringify({ action, params: params || {}, idToken: token })
   });
   const j = await res.json();
-  if (!j.ok) throw new Error(j.error || '發生錯誤');
+  if (!j.ok) {
+    if (/登入已過期/.test(j.error || '')) { relogin(); throw new Error('登入更新中，請稍候…'); }
+    throw new Error(j.error || '發生錯誤');
+  }
   return j.data;
 }
 
@@ -556,6 +591,7 @@ async function demoApi(action, p) {
       $('demoBar').hidden = false;
     } else {
       await liff.init({ liffId: CONFIG.LIFF_ID, withLoginOnExternalBrowser: true });
+      if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.origin + location.pathname }); return; }
     }
     const tab = new URLSearchParams(location.search).get('tab');
     if (tab && TYPES.some((t) => t.key === tab)) state.tab = tab;
@@ -565,6 +601,10 @@ async function demoApi(action, p) {
     $('list').innerHTML = '<div class="empty"><b>打不開 😥</b>' + esc(e.message || e) + '<br><br>請關掉後重新打開；還是不行就截圖給管理者</div>';
   }
 })();
+// 讓手機可以把 App 安裝到桌面
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 // 回到畫面時更新一次（例如從 LINE 切回來）
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.loaded) api('list').then(apply).catch(() => {}); });
 </script>
