@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>超級管家</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  /* ===== 超級管家 App（LIFF） ===== */
+  :root {
+    --bg: #F7F3EA;
+    --card: #FFFFFF;
+    --ink: #1F2933;
+    --muted: #6B7280;
+    --line: #E5DFD2;
+    --todo: #FFD1C4;
+    --project: #CFE6FF;
+    --daily: #D5F2D8;
+    --once: #E8DDFB;
+    --accent: #1F2933;
+    --danger: #D64545;
+    --warn: #E08A1E;
+    --ok: #2E8B57;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    font-size: 16px; line-height: 1.45;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  input { font: inherit; color: inherit; }
+
+  /* 頂部 */
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg);
+    padding: 14px 16px 0;
+  }
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .top h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: .5px; }
+  .top .sub { font-size: 13px; color: var(--muted); }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center;
+    border: 2px solid var(--ink); background: var(--card);
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 14px 0 12px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 8px 4px; border-radius: 999px; justify-content: center;
+    border: 2px solid var(--ink); background: var(--card);
+    font-weight: 700; font-size: 15px; display: flex; gap: 4px; align-items: center; white-space: nowrap;
+  }
+  .tab .n { font-size: 12px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+    background: var(--bg); display: inline-grid; place-items: center; }
+  .tab[aria-selected="true"] { background: var(--ink); color: #fff; }
+  .tab[aria-selected="true"] .n { background: rgba(255,255,255,.2); }
+
+  /* 列表 */
+  main { padding: 4px 16px; }
+  .card {
+    background: var(--card); border: 2px solid var(--ink); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 12px;
+    display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start;
+    transition: opacity .25s, transform .25s;
+  }
+  .card.leaving { opacity: 0; transform: translateX(24px); }
+  .check {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 2.5px solid var(--ink); margin-top: 1px;
+    display: grid; place-items: center; background: var(--card);
+  }
+  .check svg { width: 16px; height: 16px; opacity: 0; }
+  .check.done { background: var(--ok); border-color: var(--ok); }
+  .check.done svg { opacity: 1; }
+  .body { min-width: 0; }
+  .title { font-weight: 700; font-size: 17px; word-break: break-word; }
+  .meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .badge {
+    font-size: 13px; font-weight: 700; padding: 2px 10px; border-radius: 999px;
+    background: var(--bg); border: 1.5px solid var(--line);
+  }
+  .badge.danger { background: #FDE8E8; border-color: #F5B5B5; color: var(--danger); }
+  .badge.warn { background: #FFF1DE; border-color: #F6CF98; color: #9A5A00; }
+  .badge.ok { background: #E6F4EC; border-color: #B7DEC6; color: var(--ok); }
+  .chip {
+    font-size: 13px; padding: 2px 8px; border-radius: 8px; background: var(--bg); color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .more { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; }
+  .more svg { width: 20px; height: 20px; }
+  .type-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 1.5px solid var(--ink); }
+
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+  .empty b { display: block; color: var(--ink); font-size: 18px; margin-bottom: 4px; }
+
+  /* 新增按鈕 */
+  .fab {
+    position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+    height: 56px; border-radius: 16px; background: var(--ink); color: #fff;
+    font-weight: 900; font-size: 18px; display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 6px 18px rgba(31,41,51,.25); z-index: 6;
+  }
+  .fab svg { width: 22px; height: 22px; }
+
+  /* 底部面板 */
+  .scrim { position: fixed; inset: 0; background: rgba(31,41,51,.45); z-index: 20; display: none; }
+  .scrim.show { display: block; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 21;
+    background: var(--bg); border-radius: 22px 22px 0 0; border-top: 2px solid var(--ink);
+    padding: 10px 16px calc(20px + env(safe-area-inset-bottom));
+    max-height: 92vh; overflow-y: auto;
+    transform: translateY(105%); transition: transform .25s ease;
+  }
+  .sheet.show { transform: translateY(0); }
+  .grab { width: 44px; height: 5px; border-radius: 3px; background: #CFC8B8; margin: 0 auto 12px; }
+  .sheet h2 { font-size: 20px; font-weight: 900; margin: 0 0 14px; }
+  .field { margin-bottom: 16px; }
+  .field > label, .field > .lbl { display: block; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .input {
+    width: 100%; height: 48px; border-radius: 12px; border: 2px solid var(--ink); background: var(--card);
+    padding: 0 12px; font-size: 16px;
+  }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .seg button {
+    height: 44px; border-radius: 12px; border: 2px solid var(--ink); background: var(--card); font-weight: 700;
+  }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .seg button:disabled { opacity: .35; }
+  .times { display: flex; flex-wrap: wrap; gap: 8px; }
+  .time-item { display: flex; align-items: center; gap: 2px; background: var(--card); border: 2px solid var(--ink);
+    border-radius: 12px; padding: 0 4px 0 8px; height: 44px; }
+  .time-item input { border: 0; background: transparent; width: 124px; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .time-item button { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+  .add-time { height: 44px; padding: 0 14px; border-radius: 12px; border: 2px dashed var(--ink); font-weight: 700; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .switch { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+  .switch input { width: 22px; height: 22px; accent-color: var(--ink); }
+  .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 6px; }
+  .btn { height: 52px; border-radius: 14px; font-weight: 900; font-size: 17px; border: 2px solid var(--ink); background: var(--card); }
+  .btn.primary { background: var(--ink); color: #fff; }
+  .btn.danger { color: var(--danger); border-color: var(--danger); }
+  .menu-list button {
+    width: 100%; height: 54px; text-align: left; padding: 0 14px; border-radius: 14px; margin-bottom: 8px;
+    background: var(--card); border: 2px solid var(--ink); font-weight: 700; font-size: 17px;
+  }
+  .menu-list button.danger { color: var(--danger); border-color: var(--danger); }
+  .section-title { font-weight: 900; font-size: 16px; margin: 6px 0 8px; }
+
+  /* 提示 */
+  .toast {
+    position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30;
+    background: var(--ink); color: #fff; border-radius: 14px; padding: 12px 14px; font-weight: 700;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    transform: translateY(20px); opacity: 0; pointer-events: none; transition: all .2s;
+  }
+  .toast.show { transform: none; opacity: 1; pointer-events: auto; }
+  .toast button { color: #FFD966; font-weight: 900; }
+  .loading { text-align: center; padding: 60px 16px; color: var(--muted); }
+  .spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--ink);
+    animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .demo-bar { background: #FFE7A3; border-bottom: 2px solid var(--ink); font-size: 13px; text-align: center; padding: 6px 12px; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div id="demoBar" class="demo-bar" hidden>示範模式：資料只存在這個畫面，不會送到超級管家</div>
+
+<header>
+  <div class="top">
+    <div>
+      <h1>超級管家</h1>
+      <div class="sub" id="today"></div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="預設提醒時間">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    </button>
+  </div>
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+</header>
+
+<main id="list"><div class="loading"><div class="spinner"></div>載入中…</div></main>
+
+<button class="fab" id="addBtn">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  新增
+</button>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
+<div class="toast" id="toast"><span id="toastText"></span><button id="toastAction" hidden></button></div>
+
+<script>
+/* ======================= 設定（照教學填） ======================= */
+const CONFIG = {
+  LIFF_ID: '',   // 例如 2001234567-AbCdEfGh
+  API_URL: 'https://script.google.com/macros/s/AKfycbxbmnz9R-eJ1H4SnGerEPbqFNY4-d89jNUIkTb3sqjb7YSZe8fqMT66KPXjxG3nKxpl/exec'    // Apps Script 網頁應用程式網址（已填好）
+};
+/* =============================================================== */
+
+const DEMO = !CONFIG.LIFF_ID || !CONFIG.API_URL || new URLSearchParams(location.search).has('demo');
+const TYPES = [
+  { key: '待辦', label: '待辦', color: 'var(--todo)' },
+  { key: '專案', label: '專案', color: 'var(--project)' },
+  { key: '每天', label: '每天', color: 'var(--daily)' },
+  { key: '一次', label: '單次', color: 'var(--once)' }
+];
+const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+let state = { items: [], defaults: { '待辦': ['09:00', '13:00', '18:00'], '專案': ['09:00', '17:00'] }, tab: '待辦', loaded: false };
+
+/* ---------- 工具 ---------- */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+function todayStr() { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function ymdToUTC(s) { return Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)); }
+function daysBetween(a, b) { return Math.round((ymdToUTC(b) - ymdToUTC(a)) / 86400000); }
+function prettyDate(s) {
+  const w = WEEK[new Date(ymdToUTC(s)).getUTCDay()];
+  const y = +s.slice(0, 4);
+  return (y !== new Date().getFullYear() ? y + '/' : '') + (+s.slice(5, 7)) + '/' + (+s.slice(8, 10)) + '（' + w + '）';
+}
+
+/** 每筆的剩餘時間標籤 */
+function statusOf(it) {
+  const today = todayStr();
+  if (it.type === '待辦') {
+    const left = daysBetween(today, it.dt.slice(0, 10));
+    if (left < 0) return { text: '已過期 ' + (-left) + ' 天', cls: 'danger' };
+    if (left === 0) return { text: '今天截止', cls: 'danger' };
+    if (left <= 2) return { text: '剩 ' + left + ' 天', cls: 'warn' };
+    return { text: '剩 ' + left + ' 天', cls: '' };
+  }
+  if (it.type === '專案') {
+    const d = it.created ? daysBetween(it.created.slice(0, 10), today) : 0;
+    return { text: '已進行 ' + d + ' 天', cls: '' };
+  }
+  if (it.type === '一次') {
+    const t = new Date(it.dt.replace(' ', 'T') + ':00');
+    const mins = Math.max(0, Math.round((t - new Date()) / 60000));
+    const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+    const text = '還有 ' + (d ? d + ' 天 ' : '') + (h ? h + ' 小時' : '') + (!d ? (h ? ' ' : '') + m + ' 分' : '');
+    return { text, cls: mins < 60 ? 'warn' : '' };
+  }
+  return { text: '每天', cls: 'ok' };
+}
+
+function sortKey(it) {
+  if (it.type === '待辦') return it.dt;
+  if (it.type === '一次') return it.dt;
+  return (it.times[0] || '') + it.content;
+}
+
+/* ---------- 和後端溝通 ---------- */
+async function api(action, params) {
+  if (DEMO) return demoApi(action, params || {});
+  let token = liff.getIDToken();
+  const res = await fetch(CONFIG.API_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, params: params || {}, idToken: token })
+  });
+  const j = await res.json();
+  if (!j.ok) throw new Error(j.error || '發生錯誤');
+  return j.data;
+}
+
+function apply(data) {
+  state.items = data.items || [];
+  state.defaults = data.defaults || state.defaults;
+  state.loaded = true;
+  render();
+}
+
+async function run(action, params, okText) {
+  try {
+    apply(await api(action, params));
+    if (okText) toast(okText);
+    return true;
+  } catch (e) {
+    toast('⚠️ ' + e.message);
+    return false;
+  }
+}
+
+/* ---------- 畫面 ---------- */
+function render() {
+  const d = new Date();
+  $('today').textContent = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）共 ' + state.items.length + ' 件提醒';
+
+  $('tabs').innerHTML = TYPES.map((t) => {
+    const n = state.items.filter((i) => i.type === t.key).length;
+    return '<button class="tab" role="tab" aria-selected="' + (state.tab === t.key) + '" data-tab="' + t.key + '">' +
+      t.label + '<span class="n">' + n + '</span></button>';
+  }).join('');
+
+  const items = state.items.filter((i) => i.type === state.tab).sort((a, b) => sortKey(a) < sortKey(b) ? -1 : 1);
+  const label = TYPES.find((t) => t.key === state.tab).label;
+  if (!state.loaded) return;
+  if (!items.length) {
+    $('list').innerHTML = '<div class="empty"><b>目前沒有' + label + '</b>按下面的「新增」加一筆</div>';
+    return;
+  }
+  $('list').innerHTML = items.map((it) => {
+    const st = statusOf(it);
+    let when = '';
+    if (it.type === '待辦') when = '<span class="chip">' + prettyDate(it.dt.slice(0, 10)) + '截止</span>';
+    if (it.type === '一次') when = '<span class="chip">' + prettyDate(it.dt.slice(0, 10)) + ' ' + it.dt.slice(11) + '</span>';
+    const times = it.type === '一次' ? '' : it.times.map((t) => '<span class="chip">⏰ ' + t + '</span>').join('');
+    const canCheck = it.type !== '每天';
+    return '<div class="card" data-id="' + esc(it.id) + '">' +
+      (canCheck
+        ? '<button class="check" data-act="done" aria-label="完成"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></button>'
+        : '<span class="check" style="border-style:dashed;opacity:.5"></span>') +
+      '<div class="body"><div class="title">' + esc(it.content) + '</div>' +
+      '<div class="meta"><span class="badge ' + st.cls + '">' + st.text + '</span>' + when + times + '</div></div>' +
+      '<button class="more" data-act="menu" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>' +
+      '</div>';
+  }).join('');
+}
+
+/* ---------- 底部面板 ---------- */
+function openSheet(html) {
+  $('sheetBody').innerHTML = html;
+  $('scrim').classList.add('show');
+  $('sheet').classList.add('show');
+}
+function closeSheet() {
+  $('scrim').classList.remove('show');
+  $('sheet').classList.remove('show');
+}
+
+function timesEditor(times) {
+  return '<div class="times" id="timesBox">' + times.map(timeItem).join('') +
+    '<button class="add-time" type="button" data-act="addTime">＋ 時間</button></div>';
+}
+function timeItem(t) {
+  return '<span class="time-item"><input type="time" value="' + t + '" required>' +
+    '<button type="button" data-act="rmTime" aria-label="移除">✕</button></span>';
+}
+function readTimes() {
+  return [...document.querySelectorAll('#timesBox input')].map((i) => i.value).filter(Boolean);
+}
+
+/** 新增或編輯表單；item 有值就是編輯 */
+function openForm(item) {
+  const type = item ? item.type : state.tab;
+  const isEdit = !!item;
+  const tomorrow = new Date(Date.now() + 86400000);
+  const tStr = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' + pad(tomorrow.getDate());
+  const v = {
+    content: item ? item.content : '',
+    deadline: item && type === '待辦' ? item.dt.slice(0, 10) : tStr,
+    date: item && type === '一次' ? item.dt.slice(0, 10) : todayStr(),
+    time: item && type === '一次' ? item.dt.slice(11, 16) : pad(Math.min(23, new Date().getHours() + 1)) + ':00',
+    times: item ? item.times : (state.defaults[type] || ['09:00'])
+  };
+  openSheet(
+    '<h2>' + (isEdit ? '編輯' : '新增提醒') + '</h2>' +
+    '<form id="form" data-type="' + type + '" data-id="' + (item ? esc(item.id) : '') + '">' +
+    '<div class="field"><span class="lbl">類型</span><div class="seg">' +
+      TYPES.map((t) => '<button type="button" data-act="setType" data-type="' + t.key + '" aria-pressed="' + (t.key === type) + '"' + (isEdit ? ' disabled' : '') + '>' + t.label + '</button>').join('') +
+    '</div></div>' +
+    '<div class="field"><label for="fContent">內容</label><input class="input" id="fContent" maxlength="200" placeholder="例如：交報告" value="' + esc(v.content) + '" required></div>' +
+    '<div class="field" data-show="待辦"><label for="fDeadline">截止日</label><input class="input" type="date" id="fDeadline" value="' + v.deadline + '"></div>' +
+    '<div class="field" data-show="一次"><span class="lbl">提醒時間</span><div class="row2">' +
+      '<input class="input" type="date" id="fDate" value="' + v.date + '"><input class="input" type="time" id="fTime" value="' + v.time + '"></div></div>' +
+    '<div class="field" data-show="待辦 專案 每天"><span class="lbl">每天提醒時間</span>' + timesEditor(v.times) +
+      '<div class="hint" id="timesHint"></div></div>' +
+    '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" type="submit">' + (isEdit ? '儲存' : '新增') + '</button></div>' +
+    '</form>'
+  );
+  updateFormType(type, !isEdit);
+  if (!isEdit) setTimeout(() => $('fContent').focus(), 250);
+}
+
+function updateFormType(type, resetTimes) {
+  const form = $('form');
+  form.dataset.type = type;
+  form.querySelectorAll('[data-act="setType"]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.type === type));
+  form.querySelectorAll('[data-show]').forEach((el) => { el.hidden = !el.dataset.show.split(' ').includes(type); });
+  if (resetTimes) {
+    const box = $('timesBox');
+    box.querySelectorAll('.time-item').forEach((n) => n.remove());
+    const addBtn = box.querySelector('.add-time');
+    (state.defaults[type] || ['08:00']).forEach((t) => addBtn.insertAdjacentHTML('beforebegin', timeItem(t)));
+  }
+  $('timesHint').textContent = type === '待辦' ? '截止前每天在這些時間提醒；過了截止日會繼續提醒到你完成'
+    : type === '專案' ? '沒有期限，每天在這些時間提醒到你完成' : '每天固定在這些時間提醒';
+}
+
+async function submitForm(e) {
+  e.preventDefault();
+  const form = $('form');
+  const type = form.dataset.type;
+  const id = form.dataset.id;
+  const content = $('fContent').value.trim();
+  if (!content) return toast('請填寫內容');
+  const p = { type, content };
+  if (type === '待辦') p.deadline = $('fDeadline').value;
+  if (type === '一次') p.dt = $('fDate').value + ' ' + $('fTime').value;
+  if (type !== '一次') {
+    p.times = readTimes();
+    if (!p.times.length) return toast('請至少設定一個提醒時間');
+  }
+  const btn = form.querySelector('[type="submit"]');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  const ok = id ? await run('update', Object.assign({ id }, p), '已儲存') : await run('add', p, '已新增');
+  btn.disabled = false; btn.textContent = id ? '儲存' : '新增';
+  if (ok) { state.tab = type; closeSheet(); render(); }
+}
+
+function openMenu(item) {
+  openSheet(
+    '<h2>' + esc(item.content) + '</h2><div class="menu-list">' +
+    '<button data-act="edit">✏️　編輯內容或時間</button>' +
+    (item.type !== '每天' ? '<button data-act="doneFromMenu">✅　標記完成</button>' : '') +
+    '<button class="danger" data-act="delete">🗑️　刪除</button>' +
+    '<button data-act="close">取消</button></div>'
+  );
+  $('sheetBody').dataset.id = item.id;
+}
+
+function openSettings() {
+  const block = (type, hint) =>
+    '<div class="field"><div class="section-title">' + type + '的預設提醒時間</div>' +
+    '<div class="times" data-type="' + type + '">' + state.defaults[type].map(timeItem).join('') +
+    '<button class="add-time" type="button" data-act="addTime2">＋ 時間</button></div>' +
+    '<div class="hint">' + hint + '</div>' +
+    '<label class="switch" style="margin-top:10px"><input type="checkbox" data-apply="' + type + '" checked> 同時套用到目前所有' + type + '</label></div>';
+  openSheet(
+    '<h2>預設提醒時間</h2>' +
+    block('待辦', '新增待辦沒改時間就用這組') +
+    block('專案', '新增專案沒改時間就用這組') +
+    '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" data-act="saveSettings">儲存</button></div>'
+  );
+}
+
+async function saveSettings(btn) {
+  btn.disabled = true; btn.textContent = '儲存中…';
+  for (const type of ['待辦', '專案']) {
+    const times = [...document.querySelectorAll('.times[data-type="' + type + '"] input')].map((i) => i.value).filter(Boolean);
+    if (!times.length) { toast(type + '至少要一個時間'); btn.disabled = false; btn.textContent = '儲存'; return; }
+    const applyAll = document.querySelector('[data-apply="' + type + '"]').checked;
+    const ok = await run('setDefaults', { type, times, applyAll });
+    if (!ok) { btn.disabled = false; btn.textContent = '儲存'; return; }
+  }
+  closeSheet();
+  toast('預設時間已更新');
+}
+
+/* ---------- 完成 / 刪除 ---------- */
+async function complete(id, cardEl) {
+  if (cardEl) {
+    cardEl.querySelector('.check').classList.add('done');
+    cardEl.classList.add('leaving');
+  }
+  const item = state.items.find((i) => i.id === id);
+  await run('complete', { id }, '👍 已完成：' + (item ? item.content : ''));
+}
+
+async function remove(id) {
+  const item = state.items.find((i) => i.id === id);
+  if (!confirm('確定要刪除「' + (item ? item.content : '') + '」？')) return;
+  closeSheet();
+  await run('delete', { id }, '已刪除');
+}
+
+/* ---------- 提示 ---------- */
+let toastTimer;
+function toast(text) {
+  $('toastText').textContent = text;
+  $('toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2600);
+}
+
+/* ---------- 事件 ---------- */
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) { state.tab = tab.dataset.tab; render(); window.scrollTo(0, 0); return; }
+
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const act = el.dataset.act;
+  const card = el.closest('.card');
+  const id = card ? card.dataset.id : $('sheetBody').dataset.id;
+  const item = state.items.find((i) => i.id === id);
+
+  if (act === 'done') complete(id, card);
+  else if (act === 'menu') openMenu(item);
+  else if (act === 'edit') openForm(item);
+  else if (act === 'doneFromMenu') { closeSheet(); complete(id, document.querySelector('.card[data-id="' + CSS.escape(id) + '"]')); }
+  else if (act === 'delete') remove(id);
+  else if (act === 'close') closeSheet();
+  else if (act === 'setType') updateFormType(el.dataset.type, true);
+  else if (act === 'addTime' || act === 'addTime2') el.insertAdjacentHTML('beforebegin', timeItem('12:00'));
+  else if (act === 'rmTime') el.closest('.time-item').remove();
+  else if (act === 'saveSettings') saveSettings(el);
+});
+document.addEventListener('submit', (e) => { if (e.target.id === 'form') submitForm(e); });
+$('scrim').addEventListener('click', closeSheet);
+$('addBtn').addEventListener('click', () => openForm(null));
+$('settingsBtn').addEventListener('click', openSettings);
+
+/* ---------- 示範模式（還沒設定 LIFF 時可以先看畫面） ---------- */
+const demo = (() => {
+  const d = (n) => { const x = new Date(Date.now() + n * 86400000); return x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate()); };
+  let seq = 10;
+  return {
+    seq: () => 'demo' + (++seq),
+    items: [
+      { id: 'd1', type: '待辦', content: '交季報給中部', times: ['09:30', '13:00', '19:00'], dt: d(3), created: d(-2) },
+      { id: 'd2', type: '待辦', content: '客戶車牌選號資料回覆', times: ['09:30', '13:00', '19:00'], dt: d(0), created: d(-1) },
+      { id: 'd3', type: '待辦', content: '寄合約', times: ['09:30', '13:00', '19:00'], dt: d(-2), created: d(-6) },
+      { id: 'd4', type: '專案', content: '雷彫機軟體', times: ['09:00', '17:00'], dt: '', created: d(-12) },
+      { id: 'd5', type: '每天', content: '吃藥', times: ['08:00', '21:00'], dt: '', created: d(-20) },
+      { id: 'd6', type: '一次', content: '去監理站', times: [], dt: d(1) + ' 14:00', created: d(0) }
+    ],
+    defaults: { '待辦': ['09:30', '13:00', '19:00'], '專案': ['09:00', '17:00'] }
+  };
+})();
+async function demoApi(action, p) {
+  await new Promise((r) => setTimeout(r, 250));
+  const find = (id) => demo.items.findIndex((i) => i.id === id);
+  if (action === 'add') demo.items.push({ id: demo.seq(), type: p.type, content: p.content, times: p.times || [], dt: p.type === '待辦' ? p.deadline : (p.dt || ''), created: todayStr() });
+  if (action === 'complete' || action === 'delete') demo.items.splice(find(p.id), 1);
+  if (action === 'update') {
+    const it = demo.items[find(p.id)];
+    it.content = p.content;
+    if (p.times) it.times = p.times;
+    if (p.deadline) it.dt = p.deadline;
+    if (p.dt) it.dt = p.dt;
+  }
+  if (action === 'setDefaults') {
+    demo.defaults[p.type] = p.times;
+    if (p.applyAll) demo.items.filter((i) => i.type === p.type).forEach((i) => { i.times = p.times.slice(); });
+  }
+  return { items: JSON.parse(JSON.stringify(demo.items)), defaults: JSON.parse(JSON.stringify(demo.defaults)) };
+}
+
+/* ---------- 啟動 ---------- */
+(async function init() {
+  try {
+    if (DEMO) {
+      $('demoBar').hidden = false;
+    } else {
+      await liff.init({ liffId: CONFIG.LIFF_ID, withLoginOnExternalBrowser: true });
+    }
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab && TYPES.some((t) => t.key === tab)) state.tab = tab;
+    apply(await api('list'));
+  } catch (e) {
+    state.loaded = true;
+    $('list').innerHTML = '<div class="empty"><b>打不開 😥</b>' + esc(e.message || e) + '<br><br>請關掉後重新打開；還是不行就截圖給管理者</div>';
+  }
+})();
+// 回到畫面時更新一次（例如從 LINE 切回來）
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.loaded) api('list').then(apply).catch(() => {}); });
+</script>
+</body>
+</html>
