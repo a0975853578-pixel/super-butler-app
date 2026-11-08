@@ -186,6 +186,16 @@
   .modes button { height: 40px; border-radius: 10px; font-weight: 900; font-size: 16px; }
   .modes button[aria-pressed="true"] { background: var(--ink); color: #fff; }
   .tabs.three { grid-template-columns: repeat(3, 1fr); }
+  .tabs.five { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+  .tabs.five .tab { font-size: 14px; padding: 8px 2px; gap: 2px; }
+  .tabs.five .tab .n { min-width: 18px; padding: 0 4px; }
+  .buy-rows { display: grid; gap: 8px; }
+  .buy-row { display: grid; grid-template-columns: 1.4fr .8fr 1fr auto; gap: 6px; align-items: center; }
+  .buy-row .input { height: 44px; padding: 0 8px; font-size: 15px; min-width: 0; }
+  .buy-row button { width: 32px; height: 32px; border-radius: 8px; color: var(--muted); }
+  .add-row { height: 40px; padding: 0 14px; border-radius: 12px; border: 2px dashed var(--ink); font-weight: 700; justify-self: start; }
+  .chip.link { cursor: pointer; background: #FFF1DE; }
+  .seg.small button { height: 36px; font-size: 14px; }
   .contact-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 14px; }
   .contact-line .who { font-weight: 700; }
   .contact-line .tel { color: var(--muted); font-variant-numeric: tabular-nums; user-select: all; }
@@ -249,11 +259,12 @@ const PERSONAL_TABS = [
   { key: '待辦', label: '待辦' },
   { key: '專案', label: '專案' },
   { key: '每天', label: '每天' },
-  { key: '一次', label: '單次' }
+  { key: '一次', label: '單次' },
+  { key: '個人購買', label: '待購買' }
 ];
 const OFFICE_TABS = [
   { key: '辦公', label: '待辦' },
-  { key: '消耗品', label: '消耗品' },
+  { key: '辦公購買', label: '待購買' },
   { key: '聯絡人', label: '聯絡人' }
 ];
 const REMINDER_TYPES = ['待辦', '專案', '每天', '一次', '辦公'];
@@ -264,9 +275,14 @@ let state = {
   items: [], supplies: [], contacts: [],
   defaults: { '待辦': ['09:00', '13:00', '18:00'], '專案': ['09:00', '17:00'], '辦公': ['09:00', '13:00', '18:00'] },
   supplyTime: '17:30',
+  buyGroup: '店家',
   loaded: false
 };
 const curTab = () => state.tab[state.mode];
+const BUY_TABS = { '個人購買': '個人', '辦公購買': '辦公室' };
+const scopeOf = (x) => x.scope || '辦公室';
+const needOf = (scope) => state.supplies.filter((x) => x.status === '缺' && scopeOf(x) === scope);
+const projectOf = (id) => state.items.find((i) => i.id === id && i.type === '專案');
 
 /* ---------- 工具 ---------- */
 const $ = (id) => document.getElementById(id);
@@ -375,27 +391,27 @@ async function run(action, params, okText, undo) {
 /* ---------- 畫面 ---------- */
 function render() {
   const d = new Date();
-  const missing = state.supplies.filter((x) => x.status === '缺').length;
+  const missing = needOf('辦公室').length;
   $('today').textContent = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）' +
     (state.mode === '個人'
       ? '共 ' + state.items.filter((i) => i.type !== '辦公').length + ' 件提醒'
-      : '辦公待辦 ' + state.items.filter((i) => i.type === '辦公').length + ' 件・缺 ' + missing + ' 樣');
+      : '辦公待辦 ' + state.items.filter((i) => i.type === '辦公').length + ' 件・待買 ' + missing + ' 樣');
 
   $('modes').innerHTML = ['個人', '辦公室'].map((m) =>
     '<button data-mode="' + m + '" aria-pressed="' + (state.mode === m) + '">' + m + '</button>').join('');
 
   const tabs = state.mode === '個人' ? PERSONAL_TABS : OFFICE_TABS;
-  $('tabs').className = 'tabs' + (tabs.length === 3 ? ' three' : '');
+  $('tabs').className = 'tabs' + (tabs.length === 3 ? ' three' : tabs.length === 5 ? ' five' : '');
   $('tabs').innerHTML = tabs.map((t) => {
-    const n = t.key === '消耗品' ? missing : t.key === '聯絡人' ? state.contacts.length : state.items.filter((i) => i.type === t.key).length;
+    const n = BUY_TABS[t.key] ? needOf(BUY_TABS[t.key]).length : t.key === '聯絡人' ? state.contacts.length : state.items.filter((i) => i.type === t.key).length;
     return '<button class="tab" role="tab" aria-selected="' + (curTab() === t.key) + '" data-tab="' + t.key + '">' +
       t.label + '<span class="n">' + n + '</span></button>';
   }).join('');
 
   const tab = curTab();
-  $('addLabel').textContent = tab === '消耗品' ? '記下缺的東西' : tab === '聯絡人' ? '新增聯絡人' : '新增';
+  $('addLabel').textContent = BUY_TABS[tab] ? '記下要買的' : tab === '聯絡人' ? '新增聯絡人' : '新增';
   if (!state.loaded) return;
-  if (tab === '消耗品') return renderSupplies();
+  if (BUY_TABS[tab]) return renderSupplies(BUY_TABS[tab]);
   if (tab === '聯絡人') return renderContacts();
   renderReminders(tab);
 }
@@ -424,6 +440,10 @@ function renderReminders(tab) {
           '<a class="call" href="' + telHref(c.phone) + '">撥打</a></div>'
         : '<div class="contact-line">🙋 自己處理</div>';
     }
+    if (it.type === '專案') {
+      const nb = state.supplies.filter((x) => x.status === '缺' && x.projectId === it.id).length;
+      if (nb) when += '<span class="chip link" data-act="goBuy">🛒 待買 ' + nb + ' 樣</span>';
+    }
     const canCheck = it.type !== '每天';
     return '<div class="card" data-id="' + esc(it.id) + '">' +
       (canCheck ? '<button class="check" data-act="done" aria-label="完成">' + CHECK_SVG + '</button>'
@@ -434,22 +454,34 @@ function renderReminders(tab) {
   }).join('');
 }
 
-function renderSupplies() {
-  const need = state.supplies.filter((x) => x.status === '缺');
-  const usual = state.supplies.filter((x) => x.status === '買了').sort((a, b) => a.name < b.name ? -1 : 1);
-  let html = '<div class="note">每天 ' + esc(state.supplyTime) + ' 有缺的東西，會在 LINE 提醒你</div>';
+function renderSupplies(scope) {
+  const need = needOf(scope);
+  const usual = state.supplies.filter((x) => x.status === '買了' && scopeOf(x) === scope).sort((a, b) => a.name < b.name ? -1 : 1);
+  const byProject = scope === '個人' && state.buyGroup === '專案';
+  let html = '<div class="note">每天 ' + esc(state.supplyTime) + ' 還有沒買的，會在 LINE 提醒你</div>';
+  if (scope === '個人') {
+    html += '<div class="seg two small" style="margin-bottom:6px">' + ['店家', '專案'].map((g) =>
+      '<button type="button" data-act="buyGroup" data-g="' + g + '" aria-pressed="' + (state.buyGroup === g) + '">依' + g + '</button>').join('') + '</div>';
+  }
   if (!need.length) {
-    html += '<div class="empty" style="padding:28px 16px"><b>目前沒有缺的東西 👍</b>發現缺了就按下面「記下缺的東西」</div>';
+    html += '<div class="empty" style="padding:28px 16px"><b>目前沒有要買的 👍</b>按下面「記下要買的」加一筆' +
+      (scope === '個人' ? '，或在專案裡列要買的東西' : '') + '</div>';
   } else {
-    const stores = {};
-    need.forEach((x) => { const k = x.store || '還沒決定去哪買'; (stores[k] = stores[k] || []).push(x); });
-    Object.keys(stores).sort().forEach((store) => {
-      html += '<div class="group-title">🛒 ' + esc(store) + '<span>' + stores[store].length + ' 樣</span></div>';
-      html += stores[store].map((x) =>
+    const groups = {};
+    need.forEach((x) => {
+      const p = projectOf(x.projectId);
+      const k = byProject ? (p ? '📂 ' + p.content : '📝 沒有專案') : '🛒 ' + (x.store || '還沒決定去哪買');
+      (groups[k] = groups[k] || []).push(x);
+    });
+    Object.keys(groups).sort().forEach((g) => {
+      html += '<div class="group-title">' + esc(g) + '<span>' + groups[g].length + ' 樣</span></div>';
+      html += groups[g].map((x) =>
         '<div class="card" data-sid="' + esc(x.id) + '">' +
         '<button class="check" data-act="bought" aria-label="買到了">' + CHECK_SVG + '</button>' +
         '<div class="body"><div class="title">' + esc(x.name) + '</div>' +
-        '<div class="meta">' + (x.qty ? '<span class="chip">' + esc(x.qty) + '</span>' : '') + '</div></div>' +
+        '<div class="meta">' + (x.qty ? '<span class="chip">' + esc(x.qty) + '</span>' : '') +
+          (byProject ? (x.store ? '<span class="chip">🛒 ' + esc(x.store) + '</span>' : '')
+                     : (projectOf(x.projectId) ? '<span class="chip">📂 ' + esc(projectOf(x.projectId).content) + '</span>' : '')) + '</div></div>' +
         '<button class="more" data-act="supplyMenu" aria-label="更多">' + MORE_SVG + '</button></div>').join('');
     });
   }
@@ -479,6 +511,8 @@ function renderContacts() {
 /* ---------- 底部面板 ---------- */
 function openSheet(html) {
   $('toast').classList.remove('show');
+  const stores = [...new Set(state.supplies.map((x) => x.store).filter(Boolean))];
+  html += '<datalist id="sStoresAll">' + stores.map((n) => '<option value="' + esc(n) + '">').join('') + '</datalist>';
   $('sheetBody').innerHTML = html;
   $('scrim').classList.add('show');
   $('sheet').classList.add('show');
@@ -534,7 +568,7 @@ function openForm(item) {
     '<h2>' + (isEdit ? '編輯' : '新增提醒') + '</h2>' +
     '<form id="form" data-type="' + type + '" data-id="' + (item ? esc(item.id) : '') + '">' +
     '<div class="field"><span class="lbl">類型</span><div class="seg">' +
-      PERSONAL_TABS.map((t) => '<button type="button" data-act="setType" data-type="' + t.key + '" aria-pressed="' + (t.key === type) + '"' + (isEdit ? ' disabled' : '') + '>' + t.label + '</button>').join('') +
+      PERSONAL_TABS.filter((t) => !BUY_TABS[t.key]).map((t) => '<button type="button" data-act="setType" data-type="' + t.key + '" aria-pressed="' + (t.key === type) + '"' + (isEdit ? ' disabled' : '') + '>' + t.label + '</button>').join('') +
     '</div></div>' +
     '<div class="field"><label for="fContent">內容</label><input class="input" id="fContent" maxlength="200" placeholder="例如：交報告" value="' + esc(v.content) + '" required></div>' +
     '<div class="field" data-show="待辦"><label for="fDeadline">截止日</label><input class="input" type="date" id="fDeadline" value="' + v.deadline + '"></div>' +
@@ -542,11 +576,28 @@ function openForm(item) {
       '<input class="input" type="date" id="fDate" value="' + v.date + '"><input class="input" type="time" id="fTime" value="' + v.time + '"></div></div>' +
     '<div class="field" data-show="待辦 專案 每天"><span class="lbl">每天提醒時間</span>' + timesEditor(v.times) +
       '<div class="hint" id="timesHint"></div></div>' +
+    '<div class="field" data-show="專案"><span class="lbl">要買的東西（會放進個人待購買）</span>' +
+      '<div class="buy-rows" id="buyRows">' + (item ? state.supplies.filter((x) => x.status === '缺' && x.projectId === item.id) : []).map(buyRow).join('') + '</div>' +
+      '<button type="button" class="add-row" data-act="addBuy" style="margin-top:8px">＋ 加一項</button>' +
+      '<div class="hint">付錢也可以列，例如「付訂金」，去哪裡填付給誰</div></div>' +
     '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" type="submit">' + (isEdit ? '儲存' : '新增') + '</button></div>' +
     '</form>'
   );
   updateFormType(type, !isEdit);
   if (!isEdit) setTimeout(() => $('fContent').focus(), 250);
+}
+
+function buyRow(x) {
+  return '<div class="buy-row" data-sid="' + esc(x ? x.id : '') + '">' +
+    '<input class="input b-name" maxlength="60" placeholder="要買什麼" value="' + esc(x ? x.name : '') + '">' +
+    '<input class="input b-qty" maxlength="20" placeholder="數量" value="' + esc(x ? x.qty : '') + '">' +
+    '<input class="input b-store" maxlength="40" list="sStoresAll" placeholder="去哪裡" value="' + esc(x ? x.store : '') + '">' +
+    '<button type="button" data-act="rmBuy" aria-label="移除">✕</button></div>';
+}
+function readBuys() {
+  return [...document.querySelectorAll('#buyRows .buy-row')].map((r) => ({
+    id: r.dataset.sid, name: r.querySelector('.b-name').value.trim(), qty: r.querySelector('.b-qty').value.trim(), store: r.querySelector('.b-store').value.trim()
+  })).filter((b) => b.name);
 }
 
 function updateFormType(type, resetTimes) {
@@ -632,6 +683,7 @@ async function submitForm(e) {
     p.times = readTimes();
     if (!p.times.length) return toast('請至少設定一個提醒時間');
   }
+  if (type === '專案') p.buys = readBuys();
   const btn = form.querySelector('[type="submit"]');
   btn.disabled = true; btn.textContent = '儲存中…';
   const ok = id ? await run('update', Object.assign({ id }, p), '已儲存') : await run('add', p, '已新增');
@@ -640,20 +692,26 @@ async function submitForm(e) {
 }
 
 /** 消耗品：新增、加回、編輯 */
-function openSupplyForm(sup, mode) {
-  const names = [...new Set(state.supplies.map((x) => x.name))];
+function openSupplyForm(sup, mode, scope) {
+  scope = sup ? scopeOf(sup) : scope;
+  const names = [...new Set(state.supplies.filter((x) => scopeOf(x) === scope).map((x) => x.name))];
+  const projects = state.items.filter((i) => i.type === '專案');
+  const pid = sup ? sup.projectId || '' : '';
   const stores = [...new Set(state.supplies.map((x) => x.store).filter(Boolean))];
-  const title = mode === 'edit' ? '編輯消耗品' : mode === 'readd' ? '加回要買的清單' : '記下缺的東西';
+  const title = (mode === 'edit' ? '編輯' : mode === 'readd' ? '加回' : '記下要買的') + '（' + scope + '）';
   openSheet(
     '<h2>' + title + '</h2>' +
-    '<form id="supplyForm" data-id="' + (sup ? esc(sup.id) : '') + '" data-smode="' + (mode || 'new') + '">' +
-    '<div class="field"><label for="sName">缺什麼</label><input class="input" id="sName" list="sNames" maxlength="60" placeholder="例如：影印紙" value="' + esc(sup ? sup.name : '') + '"' + (mode === 'readd' ? ' readonly' : '') + ' required>' +
+    '<form id="supplyForm" data-id="' + (sup ? esc(sup.id) : '') + '" data-smode="' + (mode || 'new') + '" data-scope="' + scope + '">' +
+    '<div class="field"><label for="sName">要買什麼／付什麼</label><input class="input" id="sName" list="sNames" maxlength="60" placeholder="例如：影印紙" value="' + esc(sup ? sup.name : '') + '"' + (mode === 'readd' ? ' readonly' : '') + ' required>' +
       '<datalist id="sNames">' + names.map((n) => '<option value="' + esc(n) + '">').join('') + '</datalist></div>' +
     '<div class="row2">' +
       '<div class="field"><label for="sQty">數量</label><input class="input" id="sQty" maxlength="20" placeholder="例如：2 箱" value="' + esc(sup ? sup.qty : '') + '"></div>' +
       '<div class="field"><label for="sStore">去哪裡買</label><input class="input" id="sStore" list="sStores" maxlength="40" placeholder="例如：全聯" value="' + esc(sup ? sup.store : '') + '">' +
       '<datalist id="sStores">' + stores.map((n) => '<option value="' + esc(n) + '">').join('') + '</datalist></div>' +
     '</div>' +
+    (scope === '個人' && projects.length ? '<div class="field"><label for="sProject">屬於哪個專案</label><select class="input" id="sProject">' +
+      '<option value="">沒有專案</option>' + projects.map((pj) => '<option value="' + esc(pj.id) + '"' + (pj.id === pid ? ' selected' : '') + '>' + esc(pj.content) + '</option>').join('') +
+      '</select></div>' : '') +
     '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" type="submit">' + (mode === 'edit' ? '儲存' : '加入清單') + '</button></div>' +
     '</form>'
   );
@@ -664,11 +722,12 @@ async function submitSupply(e) {
   e.preventDefault();
   const form = $('supplyForm');
   const name = $('sName').value.trim();
-  if (!name) return toast('請填寫缺什麼');
-  const p = { name, qty: $('sQty').value.trim(), store: $('sStore').value.trim() };
+  if (!name) return toast('請填寫要買什麼');
+  const scope = form.dataset.scope;
+  const p = { name, qty: $('sQty').value.trim(), store: $('sStore').value.trim(), scope, projectId: $('sProject') ? $('sProject').value : '' };
   // 打的名字跟常買的一樣，就直接加回那一筆
   let id = form.dataset.id;
-  if (!id) { const same = state.supplies.find((x) => x.name === name); if (same) id = same.id; }
+  if (!id) { const same = state.supplies.find((x) => x.name === name && scopeOf(x) === scope); if (same) id = same.id; }
   const ok = form.dataset.smode === 'edit'
     ? await run('supplyUpdate', Object.assign({ id }, p), '已儲存')
     : await run('supplyNeed', Object.assign({ id: id || '' }, p), '已加入：' + name);
@@ -746,9 +805,9 @@ function openSettings() {
     block('待辦', '待辦的預設提醒時間', '新增待辦沒改時間就用這組') +
     block('專案', '專案的預設提醒時間', '新增專案沒改時間就用這組') +
     block('辦公', '辦公室待辦的預設提醒時間', '新增辦公室待辦沒改時間就用這組') +
-    '<div class="field"><div class="section-title">消耗品每天提醒</div>' +
+    '<div class="field"><div class="section-title">待購買每天提醒</div>' +
     '<input class="input" type="time" id="supplyTimeInput" value="' + esc(state.supplyTime) + '" style="max-width:180px">' +
-    '<div class="hint">有缺的東西才會提醒</div></div>' +
+    '<div class="hint">個人和辦公室還有沒買的才會提醒</div></div>' +
     '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" data-act="saveSettings">儲存</button></div>'
   );
 }
@@ -773,8 +832,9 @@ async function complete(id) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   const c = item.type === '辦公' ? contactOf(item.contactId) : null;
+  const nb = item.type === '專案' ? state.supplies.filter((x) => x.status === '缺' && x.projectId === item.id).length : 0;
   const ans = await askConfirm({
-    title: '完成這件事？', text: item.content, ok: '完成',
+    title: '完成這件事？', text: item.content + (nb ? '（還有 ' + nb + ' 樣沒買，會一起從待購買拿掉）' : ''), ok: '完成',
     extra: c ? '<div class="field"><label for="cfmResult">跟 ' + esc(c.name) + ' 聯絡的結果（可以不填）</label>' +
       '<textarea class="input" id="cfmResult" maxlength="300" placeholder="例如：說下週三前會付款"></textarea></div>' : ''
   });
@@ -795,13 +855,13 @@ async function bought(sid) {
   if (!s) return;
   const ans = await askConfirm({ title: '買到了嗎？', text: s.name + (s.qty ? '（' + s.qty + '）' : ''), ok: '買到了' });
   if (!ans) return;
-  await run('supplyBought', { id: sid }, '👍 已買：' + s.name, () => run('supplyNeed', { id: sid, name: s.name, qty: s.qty, store: s.store }, '已放回清單：' + s.name));
+  await run('supplyBought', { id: sid }, '👍 已買：' + s.name, () => run('supplyNeed', { id: sid, name: s.name, qty: s.qty, store: s.store, scope: scopeOf(s), projectId: s.projectId || '' }, '已放回清單：' + s.name));
 }
 
 async function supplyDelete(sid) {
   const s = state.supplies.find((x) => x.id === sid);
   if (!s) return;
-  const ans = await askConfirm({ title: '刪除這個消耗品？', text: s.name + '（刪除後不會出現在常買的東西）', ok: '刪除', danger: true });
+  const ans = await askConfirm({ title: '刪除這一項？', text: s.name + '（刪除後不會出現在常買的東西）', ok: '刪除', danger: true });
   if (!ans) return;
   await run('supplyDelete', { id: sid }, '已刪除：' + s.name, () => run('supplyUndelete', { id: sid }, '已復原：' + s.name));
 }
@@ -870,6 +930,10 @@ document.addEventListener('click', (e) => {
   else if (act === 'supplyEdit') openSupplyForm(sup, 'edit');
   else if (act === 'supplyDelete') { closeSheet(); supplyDelete(sid); }
   else if (act === 'readd') openSupplyForm(sup, 'readd');
+  else if (act === 'buyGroup') { state.buyGroup = el.dataset.g; render(); }
+  else if (act === 'goBuy') { state.tab['個人'] = '個人購買'; state.buyGroup = '專案'; render(); window.scrollTo(0, 0); }
+  else if (act === 'addBuy') { $('buyRows').insertAdjacentHTML('beforeend', buyRow(null)); const r = $('buyRows').lastElementChild; r.querySelector('.b-name').focus(); }
+  else if (act === 'rmBuy') el.closest('.buy-row').remove();
   else if (act === 'contactOpen') openContact(contactOf(cid));
   else if (act === 'contactEdit') openContactForm(contactOf(cid));
   else if (act === 'contactDelete') { closeSheet(); contactDelete(cid); }
@@ -890,7 +954,7 @@ document.addEventListener('submit', (e) => {
 $('scrim').addEventListener('click', closeSheet);
 $('addBtn').addEventListener('click', () => {
   const t = curTab();
-  if (t === '消耗品') openSupplyForm(null);
+  if (BUY_TABS[t]) openSupplyForm(null, null, BUY_TABS[t]);
   else if (t === '聯絡人') openContactForm(null);
   else openForm(null);
 });
@@ -923,7 +987,11 @@ const demo = (() => {
       { id: 's3', name: '原子筆（藍）', qty: '1 盒', store: '文具行', status: '缺' },
       { id: 's4', name: '透明膠帶', qty: '3 卷', store: '文具行', status: '買了' },
       { id: 's5', name: '衛生紙', qty: '1 串', store: '全聯', status: '買了' },
-      { id: 's6', name: '牌照封套', qty: '100 個', store: '印刷廠', status: '買了' }
+      { id: 's6', name: '牌照封套', qty: '100 個', store: '印刷廠', status: '買了' },
+      { id: 'p1', scope: '個人', projectId: 'd4', name: '雷射模組', qty: '1 個', store: '蝦皮', status: '缺' },
+      { id: 'p2', scope: '個人', projectId: 'd4', name: '鋁擠型 2020', qty: '4 支', store: '五金行', status: '缺' },
+      { id: 'p3', scope: '個人', projectId: 'd4', name: '付外殼加工訂金', qty: '', store: '加工廠 陳老闆', status: '缺' },
+      { id: 'p4', scope: '個人', projectId: '', name: '電池 AA', qty: '1 排', store: '全聯', status: '買了' }
     ],
     trash: { items: {}, supplies: {}, contacts: {} },
     defaults: { '待辦': ['09:30', '13:00', '19:00'], '專案': ['09:00', '17:00'], '辦公': ['09:00', '13:00', '18:00'] },
@@ -940,7 +1008,21 @@ async function demoApi(action, p) {
   if ((action === 'add' || action === 'update') && p.newContact) {
     cid = D.seq(); D.contacts.push({ id: cid, name: p.newContact.name, phone: p.newContact.phone, history: [] });
   }
-  if (action === 'add') D.items.push({ id: D.seq(), type: p.type, content: p.content, times: p.times || [], dt: p.type === '待辦' || p.type === '辦公' ? p.deadline : (p.dt || ''), created: todayStr(), contactId: cid || '' });
+  const syncBuys = (pid) => {
+    if (!p.buys) return;
+    const keep = p.buys.map((b) => b.id).filter(Boolean);
+    D.supplies.filter((x) => x.projectId === pid && x.status === '缺' && keep.indexOf(x.id) < 0).forEach((x) => take(D.supplies, D.trash.supplies, x.id));
+    p.buys.forEach((b) => {
+      const s = b.id && D.supplies.find((x) => x.id === b.id);
+      if (s) Object.assign(s, { name: b.name, qty: b.qty, store: b.store });
+      else D.supplies.push({ id: D.seq(), scope: '個人', projectId: pid, name: b.name, qty: b.qty, store: b.store, status: '缺' });
+    });
+  };
+  if (action === 'add') {
+    const nid = D.seq();
+    D.items.push({ id: nid, type: p.type, content: p.content, times: p.times || [], dt: p.type === '待辦' || p.type === '辦公' ? p.deadline : (p.dt || ''), created: todayStr(), contactId: cid || '' });
+    if (p.type === '專案') syncBuys(nid);
+  }
   if (action === 'update') {
     const it = D.items[fi(D.items, p.id)];
     it.content = p.content;
@@ -948,11 +1030,13 @@ async function demoApi(action, p) {
     if (p.deadline) it.dt = p.deadline;
     if (p.dt) it.dt = p.dt;
     if (it.type === '辦公') it.contactId = cid || '';
+    if (it.type === '專案') syncBuys(it.id);
   }
   if (action === 'complete') {
     const it = D.items[fi(D.items, p.id)];
     const c = it && D.contacts.find((x) => x.id === it.contactId);
     if (c) { c.history.push({ date: todayStr(), todo: it.content, result: p.result || '', itemId: it.id }); }
+    D.supplies.filter((x) => x.projectId === p.id && x.status === '缺').forEach((x) => { x.removedBy = p.id; take(D.supplies, D.trash.supplies, x.id); });
     take(D.items, D.trash.items, p.id);
   }
   if (action === 'delete') take(D.items, D.trash.items, p.id);
@@ -960,6 +1044,7 @@ async function demoApi(action, p) {
     const it = D.trash.items[p.id];
     const c = it && D.contacts.find((x) => x.id === it.contactId);
     if (c) c.history = c.history.filter((h) => h.itemId !== p.id);
+    Object.keys(D.trash.supplies).forEach((sid) => { if (D.trash.supplies[sid].removedBy === p.id) { delete D.trash.supplies[sid].removedBy; putBack(D.supplies, D.trash.supplies, sid); } });
     putBack(D.items, D.trash.items, p.id);
   }
   if (action === 'setDefaults') {
@@ -969,10 +1054,11 @@ async function demoApi(action, p) {
   if (action === 'setSupplyTime') D.supplyTime = p.time;
   if (action === 'supplyNeed') {
     let s = p.id && D.supplies.find((x) => x.id === p.id);
-    if (!s) { s = { id: D.seq(), name: p.name }; D.supplies.push(s); }
+    if (!s) { s = { id: D.seq(), name: p.name, scope: p.scope || '辦公室' }; D.supplies.push(s); }
     Object.assign(s, { qty: p.qty, store: p.store, status: '缺' });
+    if (p.projectId !== undefined) s.projectId = p.projectId;
   }
-  if (action === 'supplyUpdate') Object.assign(D.supplies[fi(D.supplies, p.id)], { name: p.name, qty: p.qty, store: p.store });
+  if (action === 'supplyUpdate') Object.assign(D.supplies[fi(D.supplies, p.id)], { name: p.name, qty: p.qty, store: p.store }, p.projectId !== undefined ? { projectId: p.projectId } : {});
   if (action === 'supplyBought') D.supplies[fi(D.supplies, p.id)].status = '買了';
   if (action === 'supplyDelete') take(D.supplies, D.trash.supplies, p.id);
   if (action === 'supplyUndelete') putBack(D.supplies, D.trash.supplies, p.id);
