@@ -179,6 +179,33 @@
     animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .demo-bar { background: #FFE7A3; border-bottom: 2px solid var(--ink); font-size: 13px; text-align: center; padding: 6px 12px; font-weight: 700; }
+
+  /* 個人／辦公室切換 */
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 12px; background: var(--card);
+    border: 2px solid var(--ink); border-radius: 14px; padding: 4px; }
+  .modes button { height: 40px; border-radius: 10px; font-weight: 900; font-size: 16px; }
+  .modes button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .tabs.three { grid-template-columns: repeat(3, 1fr); }
+  .contact-line { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; font-size: 14px; }
+  .contact-line .who { font-weight: 700; }
+  .contact-line .tel { color: var(--muted); font-variant-numeric: tabular-nums; user-select: all; }
+  .call { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 14px; border-radius: 999px;
+    background: var(--ok); color: #fff; font-weight: 900; text-decoration: none; font-size: 14px; }
+  .group-title { font-weight: 900; font-size: 15px; margin: 16px 2px 8px; display: flex; justify-content: space-between; }
+  .group-title span { color: var(--muted); font-weight: 700; font-size: 13px; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { border: 2px dashed var(--ink); border-radius: 999px; padding: 6px 12px; font-weight: 700; background: var(--card); font-size: 15px; }
+  .note { font-size: 13px; color: var(--muted); margin: 2px 2px 10px; }
+  textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: vertical; line-height: 1.5; }
+  select.input { appearance: auto; }
+  .seg.two { grid-template-columns: 1fr 1fr; }
+  .history { border-left: 3px solid var(--line); padding: 2px 0 2px 10px; margin: 0 0 12px; }
+  .history .d { font-size: 12px; color: var(--muted); }
+  .history .r { font-weight: 700; }
+  .confirm-text { font-size: 16px; margin: -4px 0 16px; color: var(--ink); }
+  .card .body.tap { cursor: pointer; }
+  [hidden] { display: none !important; }
+  .new-contact { margin-top: 8px; display: grid; gap: 8px; }
 </style>
 </head>
 <body>
@@ -191,10 +218,11 @@
       <h1>超級管家</h1>
       <div class="sub" id="today"></div>
     </div>
-    <button class="icon-btn" id="settingsBtn" aria-label="預設提醒時間">
+    <button class="icon-btn" id="settingsBtn" aria-label="提醒時間設定">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
     </button>
   </div>
+  <div class="modes" id="modes"></div>
   <nav class="tabs" id="tabs" role="tablist"></nav>
 </header>
 
@@ -202,33 +230,47 @@
 
 <button class="fab" id="addBtn">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-  新增
+  <span id="addLabel">新增</span>
 </button>
 
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"><div class="grab"></div><div id="sheetBody"></div></div>
-<div class="toast" id="toast"><span id="toastText"></span><button id="toastAction" hidden></button></div>
+<div class="toast" id="toast"><span id="toastText"></span><button id="toastAction" hidden>復原</button></div>
 
 <script>
-/* ======================= 設定（照教學填） ======================= */
+/* ======================= 設定 ======================= */
 const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbxbmnz9R-eJ1H4SnGerEPbqFNY4-d89jNUIkTb3sqjb7YSZe8fqMT66KPXjxG3nKxpl/exec'    // Apps Script 網頁應用程式網址（已填好）
+  API_URL: 'https://script.google.com/macros/s/AKfycbxbmnz9R-eJ1H4SnGerEPbqFNY4-d89jNUIkTb3sqjb7YSZe8fqMT66KPXjxG3nKxpl/exec'
 };
-/* =============================================================== */
+/* ==================================================== */
 
 const DEMO = !CONFIG.API_URL || new URLSearchParams(location.search).has('demo');
-const TYPES = [
-  { key: '待辦', label: '待辦', color: 'var(--todo)' },
-  { key: '專案', label: '專案', color: 'var(--project)' },
-  { key: '每天', label: '每天', color: 'var(--daily)' },
-  { key: '一次', label: '單次', color: 'var(--once)' }
+const PERSONAL_TABS = [
+  { key: '待辦', label: '待辦' },
+  { key: '專案', label: '專案' },
+  { key: '每天', label: '每天' },
+  { key: '一次', label: '單次' }
 ];
+const OFFICE_TABS = [
+  { key: '辦公', label: '待辦' },
+  { key: '消耗品', label: '消耗品' },
+  { key: '聯絡人', label: '聯絡人' }
+];
+const REMINDER_TYPES = ['待辦', '專案', '每天', '一次', '辦公'];
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
-let state = { items: [], defaults: { '待辦': ['09:00', '13:00', '18:00'], '專案': ['09:00', '17:00'] }, tab: '待辦', loaded: false };
+let state = {
+  mode: '個人',
+  tab: { '個人': '待辦', '辦公室': '辦公' },
+  items: [], supplies: [], contacts: [],
+  defaults: { '待辦': ['09:00', '13:00', '18:00'], '專案': ['09:00', '17:00'], '辦公': ['09:00', '13:00', '18:00'] },
+  supplyTime: '17:30',
+  loaded: false
+};
+const curTab = () => state.tab[state.mode];
 
 /* ---------- 工具 ---------- */
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
 function todayStr() { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
 function ymdToUTC(s) { return Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)); }
@@ -238,11 +280,13 @@ function prettyDate(s) {
   const y = +s.slice(0, 4);
   return (y !== new Date().getFullYear() ? y + '/' : '') + (+s.slice(5, 7)) + '/' + (+s.slice(8, 10)) + '（' + w + '）';
 }
+const telHref = (p) => 'tel:' + String(p || '').replace(/[^0-9+#*]/g, '');
+const contactOf = (id) => state.contacts.find((c) => c.id === id);
 
 /** 每筆的剩餘時間標籤 */
 function statusOf(it) {
   const today = todayStr();
-  if (it.type === '待辦') {
+  if (it.type === '待辦' || it.type === '辦公') {
     const left = daysBetween(today, it.dt.slice(0, 10));
     if (left < 0) return { text: '已過期 ' + (-left) + ' 天', cls: 'danger' };
     if (left === 0) return { text: '今天截止', cls: 'danger' };
@@ -262,10 +306,8 @@ function statusOf(it) {
   }
   return { text: '每天', cls: 'ok' };
 }
-
 function sortKey(it) {
-  if (it.type === '待辦') return it.dt;
-  if (it.type === '一次') return it.dt;
+  if (it.type === '待辦' || it.type === '辦公' || it.type === '一次') return it.dt;
   return (it.times[0] || '') + it.content;
 }
 
@@ -295,10 +337,7 @@ function showNeedKey(msg) {
 async function api(action, params) {
   if (DEMO) return demoApi(action, params || {});
   const key = appKey();
-  const res = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action, params: params || {}, key })
-  });
+  const res = await fetch(CONFIG.API_URL, { method: 'POST', body: JSON.stringify({ action, params: params || {}, key }) });
   const j = await res.json();
   if (!j.ok) {
     if (/連結失效/.test(j.error || '')) {
@@ -312,15 +351,19 @@ async function api(action, params) {
 
 function apply(data) {
   state.items = data.items || [];
-  state.defaults = data.defaults || state.defaults;
+  state.supplies = data.supplies || [];
+  state.contacts = data.contacts || [];
+  state.defaults = Object.assign({}, state.defaults, data.defaults || {});
+  if (data.supplyTime) state.supplyTime = data.supplyTime;
   state.loaded = true;
   render();
 }
 
-async function run(action, params, okText) {
+/** 呼叫後端；成功時顯示提示，給了 undo 就多一顆「復原」 */
+async function run(action, params, okText, undo) {
   try {
     apply(await api(action, params));
-    if (okText) toast(okText);
+    if (okText) toast(okText, undo);
     return true;
   } catch (e) {
     if (e.message === 'NO_KEY') { closeSheet(); showNeedKey('連結已失效'); return false; }
@@ -332,17 +375,37 @@ async function run(action, params, okText) {
 /* ---------- 畫面 ---------- */
 function render() {
   const d = new Date();
-  $('today').textContent = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）共 ' + state.items.length + ' 件提醒';
+  const missing = state.supplies.filter((x) => x.status === '缺').length;
+  $('today').textContent = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WEEK[d.getDay()] + '）' +
+    (state.mode === '個人'
+      ? '共 ' + state.items.filter((i) => i.type !== '辦公').length + ' 件提醒'
+      : '辦公待辦 ' + state.items.filter((i) => i.type === '辦公').length + ' 件・缺 ' + missing + ' 樣');
 
-  $('tabs').innerHTML = TYPES.map((t) => {
-    const n = state.items.filter((i) => i.type === t.key).length;
-    return '<button class="tab" role="tab" aria-selected="' + (state.tab === t.key) + '" data-tab="' + t.key + '">' +
+  $('modes').innerHTML = ['個人', '辦公室'].map((m) =>
+    '<button data-mode="' + m + '" aria-pressed="' + (state.mode === m) + '">' + m + '</button>').join('');
+
+  const tabs = state.mode === '個人' ? PERSONAL_TABS : OFFICE_TABS;
+  $('tabs').className = 'tabs' + (tabs.length === 3 ? ' three' : '');
+  $('tabs').innerHTML = tabs.map((t) => {
+    const n = t.key === '消耗品' ? missing : t.key === '聯絡人' ? state.contacts.length : state.items.filter((i) => i.type === t.key).length;
+    return '<button class="tab" role="tab" aria-selected="' + (curTab() === t.key) + '" data-tab="' + t.key + '">' +
       t.label + '<span class="n">' + n + '</span></button>';
   }).join('');
 
-  const items = state.items.filter((i) => i.type === state.tab).sort((a, b) => sortKey(a) < sortKey(b) ? -1 : 1);
-  const label = TYPES.find((t) => t.key === state.tab).label;
+  const tab = curTab();
+  $('addLabel').textContent = tab === '消耗品' ? '記下缺的東西' : tab === '聯絡人' ? '新增聯絡人' : '新增';
   if (!state.loaded) return;
+  if (tab === '消耗品') return renderSupplies();
+  if (tab === '聯絡人') return renderContacts();
+  renderReminders(tab);
+}
+
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>';
+const MORE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+
+function renderReminders(tab) {
+  const items = state.items.filter((i) => i.type === tab).sort((a, b) => sortKey(a) < sortKey(b) ? -1 : 1);
+  const label = tab === '辦公' ? '辦公室待辦' : PERSONAL_TABS.find((t) => t.key === tab).label;
   if (!items.length) {
     $('list').innerHTML = '<div class="empty"><b>目前沒有' + label + '</b>按下面的「新增」加一筆</div>';
     return;
@@ -350,23 +413,72 @@ function render() {
   $('list').innerHTML = items.map((it) => {
     const st = statusOf(it);
     let when = '';
-    if (it.type === '待辦') when = '<span class="chip">' + prettyDate(it.dt.slice(0, 10)) + '截止</span>';
+    if (it.type === '待辦' || it.type === '辦公') when = '<span class="chip">' + prettyDate(it.dt.slice(0, 10)) + '截止</span>';
     if (it.type === '一次') when = '<span class="chip">' + prettyDate(it.dt.slice(0, 10)) + ' ' + it.dt.slice(11) + '</span>';
     const times = it.type === '一次' ? '' : it.times.map((t) => '<span class="chip">⏰ ' + t + '</span>').join('');
+    let contact = '';
+    if (it.type === '辦公') {
+      const c = contactOf(it.contactId);
+      contact = c
+        ? '<div class="contact-line">📞 <span class="who">' + esc(c.name) + '</span><span class="tel">' + esc(c.phone) + '</span>' +
+          '<a class="call" href="' + telHref(c.phone) + '">撥打</a></div>'
+        : '<div class="contact-line">🙋 自己處理</div>';
+    }
     const canCheck = it.type !== '每天';
     return '<div class="card" data-id="' + esc(it.id) + '">' +
-      (canCheck
-        ? '<button class="check" data-act="done" aria-label="完成"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></button>'
-        : '<span class="check" style="border-style:dashed;opacity:.5"></span>') +
+      (canCheck ? '<button class="check" data-act="done" aria-label="完成">' + CHECK_SVG + '</button>'
+                : '<span class="check" style="border-style:dashed;opacity:.5"></span>') +
       '<div class="body"><div class="title">' + esc(it.content) + '</div>' +
-      '<div class="meta"><span class="badge ' + st.cls + '">' + st.text + '</span>' + when + times + '</div></div>' +
-      '<button class="more" data-act="menu" aria-label="更多"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>' +
-      '</div>';
+      '<div class="meta"><span class="badge ' + st.cls + '">' + st.text + '</span>' + when + times + '</div>' + contact + '</div>' +
+      '<button class="more" data-act="menu" aria-label="更多">' + MORE_SVG + '</button></div>';
+  }).join('');
+}
+
+function renderSupplies() {
+  const need = state.supplies.filter((x) => x.status === '缺');
+  const usual = state.supplies.filter((x) => x.status === '買了').sort((a, b) => a.name < b.name ? -1 : 1);
+  let html = '<div class="note">每天 ' + esc(state.supplyTime) + ' 有缺的東西，會在 LINE 提醒你</div>';
+  if (!need.length) {
+    html += '<div class="empty" style="padding:28px 16px"><b>目前沒有缺的東西 👍</b>發現缺了就按下面「記下缺的東西」</div>';
+  } else {
+    const stores = {};
+    need.forEach((x) => { const k = x.store || '還沒決定去哪買'; (stores[k] = stores[k] || []).push(x); });
+    Object.keys(stores).sort().forEach((store) => {
+      html += '<div class="group-title">🛒 ' + esc(store) + '<span>' + stores[store].length + ' 樣</span></div>';
+      html += stores[store].map((x) =>
+        '<div class="card" data-sid="' + esc(x.id) + '">' +
+        '<button class="check" data-act="bought" aria-label="買到了">' + CHECK_SVG + '</button>' +
+        '<div class="body"><div class="title">' + esc(x.name) + '</div>' +
+        '<div class="meta">' + (x.qty ? '<span class="chip">' + esc(x.qty) + '</span>' : '') + '</div></div>' +
+        '<button class="more" data-act="supplyMenu" aria-label="更多">' + MORE_SVG + '</button></div>').join('');
+    });
+  }
+  if (usual.length) {
+    html += '<div class="group-title">常買的東西<span>缺了點一下加回去</span></div><div class="pill-row">' +
+      usual.map((x) => '<button class="pill" data-act="readd" data-sid="' + esc(x.id) + '">＋ ' + esc(x.name) + '</button>').join('') + '</div>';
+  }
+  $('list').innerHTML = html;
+}
+
+function renderContacts() {
+  const list = state.contacts.slice().sort((a, b) => a.name < b.name ? -1 : 1);
+  if (!list.length) {
+    $('list').innerHTML = '<div class="empty"><b>還沒有聯絡人</b>新增辦公室待辦時選「要聯絡人」，也會自動存進來</div>';
+    return;
+  }
+  $('list').innerHTML = list.map((c) => {
+    const n = (c.history || []).length;
+    return '<div class="card" data-cid="' + esc(c.id) + '" style="grid-template-columns:1fr auto">' +
+      '<div class="body tap" data-act="contactOpen"><div class="title">' + esc(c.name) + '</div>' +
+      '<div class="meta"><span class="chip" style="user-select:all">' + esc(c.phone) + '</span>' +
+      (n ? '<span class="badge">' + n + ' 筆聯絡紀錄</span>' : '') + '</div></div>' +
+      '<a class="call" href="' + telHref(c.phone) + '">撥打</a></div>';
   }).join('');
 }
 
 /* ---------- 底部面板 ---------- */
 function openSheet(html) {
+  $('toast').classList.remove('show');
   $('sheetBody').innerHTML = html;
   $('scrim').classList.add('show');
   $('sheet').classList.add('show');
@@ -374,6 +486,25 @@ function openSheet(html) {
 function closeSheet() {
   $('scrim').classList.remove('show');
   $('sheet').classList.remove('show');
+  if (confirmResolve) { const r = confirmResolve; confirmResolve = null; r(null); }
+}
+
+/** 確認視窗：按「取消」或點外面就不做；extra 可以多放輸入欄位 */
+let confirmResolve = null;
+function askConfirm(opt) {
+  return new Promise((resolve) => {
+    openSheet('<h2>' + esc(opt.title) + '</h2>' +
+      (opt.text ? '<p class="confirm-text">' + esc(opt.text) + '</p>' : '') + (opt.extra || '') +
+      '<div class="actions"><button type="button" class="btn" data-act="cfmNo">取消</button>' +
+      '<button type="button" class="btn ' + (opt.danger ? 'danger' : 'primary') + '" data-act="cfmYes">' + esc(opt.ok) + '</button></div>');
+    confirmResolve = resolve;
+  });
+}
+function finishConfirm(yes) {
+  const r = confirmResolve; confirmResolve = null;
+  const result = $('cfmResult') ? $('cfmResult').value.trim() : '';
+  $('scrim').classList.remove('show'); $('sheet').classList.remove('show');
+  if (r) r(yes ? { result } : null);
 }
 
 function timesEditor(times) {
@@ -384,19 +515,17 @@ function timeItem(t) {
   return '<span class="time-item"><input type="time" value="' + t + '" required>' +
     '<button type="button" data-act="rmTime" aria-label="移除">✕</button></span>';
 }
-function readTimes() {
-  return [...document.querySelectorAll('#timesBox input')].map((i) => i.value).filter(Boolean);
-}
+function readTimes() { return [...document.querySelectorAll('#timesBox input')].map((i) => i.value).filter(Boolean); }
+function tomorrowStr() { const t = new Date(Date.now() + 86400000); return t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate()); }
 
-/** 新增或編輯表單；item 有值就是編輯 */
+/** 個人提醒的新增／編輯 */
 function openForm(item) {
-  const type = item ? item.type : state.tab;
+  const type = item ? item.type : curTab();
+  if (type === '辦公') return openOfficeForm(item);
   const isEdit = !!item;
-  const tomorrow = new Date(Date.now() + 86400000);
-  const tStr = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' + pad(tomorrow.getDate());
   const v = {
     content: item ? item.content : '',
-    deadline: item && type === '待辦' ? item.dt.slice(0, 10) : tStr,
+    deadline: item && type === '待辦' ? item.dt.slice(0, 10) : tomorrowStr(),
     date: item && type === '一次' ? item.dt.slice(0, 10) : todayStr(),
     time: item && type === '一次' ? item.dt.slice(11, 16) : pad(Math.min(23, new Date().getHours() + 1)) + ':00',
     times: item ? item.times : (state.defaults[type] || ['09:00'])
@@ -405,7 +534,7 @@ function openForm(item) {
     '<h2>' + (isEdit ? '編輯' : '新增提醒') + '</h2>' +
     '<form id="form" data-type="' + type + '" data-id="' + (item ? esc(item.id) : '') + '">' +
     '<div class="field"><span class="lbl">類型</span><div class="seg">' +
-      TYPES.map((t) => '<button type="button" data-act="setType" data-type="' + t.key + '" aria-pressed="' + (t.key === type) + '"' + (isEdit ? ' disabled' : '') + '>' + t.label + '</button>').join('') +
+      PERSONAL_TABS.map((t) => '<button type="button" data-act="setType" data-type="' + t.key + '" aria-pressed="' + (t.key === type) + '"' + (isEdit ? ' disabled' : '') + '>' + t.label + '</button>').join('') +
     '</div></div>' +
     '<div class="field"><label for="fContent">內容</label><input class="input" id="fContent" maxlength="200" placeholder="例如：交報告" value="' + esc(v.content) + '" required></div>' +
     '<div class="field" data-show="待辦"><label for="fDeadline">截止日</label><input class="input" type="date" id="fDeadline" value="' + v.deadline + '"></div>' +
@@ -435,6 +564,60 @@ function updateFormType(type, resetTimes) {
     : type === '專案' ? '沒有期限，每天在這些時間提醒到你完成' : '每天固定在這些時間提醒';
 }
 
+/** 辦公室待辦的新增／編輯：可以選自己處理或要聯絡誰 */
+function openOfficeForm(item) {
+  const isEdit = !!item;
+  const cid = item ? item.contactId || '' : '';
+  const opts = state.contacts.slice().sort((a, b) => a.name < b.name ? -1 : 1)
+    .map((c) => '<option value="' + esc(c.id) + '"' + (c.id === cid ? ' selected' : '') + '>' + esc(c.name) + '　' + esc(c.phone) + '</option>').join('');
+  openSheet(
+    '<h2>' + (isEdit ? '編輯辦公室待辦' : '新增辦公室待辦') + '</h2>' +
+    '<form id="officeForm" data-id="' + (item ? esc(item.id) : '') + '">' +
+    '<div class="field"><label for="oContent">要做什麼</label><input class="input" id="oContent" maxlength="200" placeholder="例如：確認牌照進度" value="' + esc(item ? item.content : '') + '" required></div>' +
+    '<div class="field"><label for="oDeadline">截止日</label><input class="input" type="date" id="oDeadline" value="' + (item ? item.dt.slice(0, 10) : tomorrowStr()) + '"></div>' +
+    '<div class="field"><span class="lbl">怎麼處理</span><div class="seg two">' +
+      '<button type="button" data-act="setHow" data-how="self" aria-pressed="' + !cid + '">🙋 自己處理</button>' +
+      '<button type="button" data-act="setHow" data-how="contact" aria-pressed="' + !!cid + '">📞 要聯絡人</button></div></div>' +
+    '<div class="field" id="howContact"' + (cid ? '' : ' hidden') + '><label for="oContact">聯絡誰</label>' +
+      '<select class="input" id="oContact">' + opts + '<option value="__new"' + (state.contacts.length ? '' : ' selected') + '>＋ 新的聯絡人</option></select>' +
+      '<div id="newContact" class="new-contact"' + (state.contacts.length ? ' hidden' : '') + '>' +
+        '<input class="input" id="ncName" maxlength="40" placeholder="名字（例如：監理站 陳小姐）">' +
+        '<input class="input" id="ncPhone" type="tel" maxlength="30" placeholder="電話">' +
+      '</div></div>' +
+    '<div class="field"><span class="lbl">每天提醒時間</span>' + timesEditor(item ? item.times : state.defaults['辦公']) +
+      '<div class="hint">截止前每天在這些時間提醒；過了截止日會繼續提醒到你完成</div></div>' +
+    '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" type="submit">' + (isEdit ? '儲存' : '新增') + '</button></div>' +
+    '</form>'
+  );
+  $('officeForm').dataset.how = cid ? 'contact' : 'self';
+  if (!isEdit) setTimeout(() => $('oContent').focus(), 250);
+}
+
+async function submitOffice(e) {
+  e.preventDefault();
+  const form = $('officeForm');
+  const id = form.dataset.id;
+  const content = $('oContent').value.trim();
+  if (!content) return toast('請填寫要做什麼');
+  const times = readTimes();
+  if (!times.length) return toast('請至少設定一個提醒時間');
+  const p = { type: '辦公', content, deadline: $('oDeadline').value, times, contactId: '' };
+  if (form.dataset.how === 'contact') {
+    if ($('oContact').value === '__new') {
+      const name = $('ncName').value.trim(), phone = $('ncPhone').value.trim();
+      if (!name || !phone) return toast('請填聯絡人的名字和電話');
+      p.newContact = { name, phone };
+    } else {
+      p.contactId = $('oContact').value;
+    }
+  }
+  const btn = form.querySelector('[type="submit"]');
+  btn.disabled = true; btn.textContent = '儲存中…';
+  const ok = id ? await run('update', Object.assign({ id }, p), '已儲存') : await run('add', p, '已新增');
+  btn.disabled = false; btn.textContent = id ? '儲存' : '新增';
+  if (ok) closeSheet();
+}
+
 async function submitForm(e) {
   e.preventDefault();
   const form = $('form');
@@ -453,7 +636,80 @@ async function submitForm(e) {
   btn.disabled = true; btn.textContent = '儲存中…';
   const ok = id ? await run('update', Object.assign({ id }, p), '已儲存') : await run('add', p, '已新增');
   btn.disabled = false; btn.textContent = id ? '儲存' : '新增';
-  if (ok) { state.tab = type; closeSheet(); render(); }
+  if (ok) { state.tab['個人'] = type; closeSheet(); render(); }
+}
+
+/** 消耗品：新增、加回、編輯 */
+function openSupplyForm(sup, mode) {
+  const names = [...new Set(state.supplies.map((x) => x.name))];
+  const stores = [...new Set(state.supplies.map((x) => x.store).filter(Boolean))];
+  const title = mode === 'edit' ? '編輯消耗品' : mode === 'readd' ? '加回要買的清單' : '記下缺的東西';
+  openSheet(
+    '<h2>' + title + '</h2>' +
+    '<form id="supplyForm" data-id="' + (sup ? esc(sup.id) : '') + '" data-smode="' + (mode || 'new') + '">' +
+    '<div class="field"><label for="sName">缺什麼</label><input class="input" id="sName" list="sNames" maxlength="60" placeholder="例如：影印紙" value="' + esc(sup ? sup.name : '') + '"' + (mode === 'readd' ? ' readonly' : '') + ' required>' +
+      '<datalist id="sNames">' + names.map((n) => '<option value="' + esc(n) + '">').join('') + '</datalist></div>' +
+    '<div class="row2">' +
+      '<div class="field"><label for="sQty">數量</label><input class="input" id="sQty" maxlength="20" placeholder="例如：2 箱" value="' + esc(sup ? sup.qty : '') + '"></div>' +
+      '<div class="field"><label for="sStore">去哪裡買</label><input class="input" id="sStore" list="sStores" maxlength="40" placeholder="例如：全聯" value="' + esc(sup ? sup.store : '') + '">' +
+      '<datalist id="sStores">' + stores.map((n) => '<option value="' + esc(n) + '">').join('') + '</datalist></div>' +
+    '</div>' +
+    '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" type="submit">' + (mode === 'edit' ? '儲存' : '加入清單') + '</button></div>' +
+    '</form>'
+  );
+  if (!mode) setTimeout(() => $('sName').focus(), 250);
+}
+
+async function submitSupply(e) {
+  e.preventDefault();
+  const form = $('supplyForm');
+  const name = $('sName').value.trim();
+  if (!name) return toast('請填寫缺什麼');
+  const p = { name, qty: $('sQty').value.trim(), store: $('sStore').value.trim() };
+  // 打的名字跟常買的一樣，就直接加回那一筆
+  let id = form.dataset.id;
+  if (!id) { const same = state.supplies.find((x) => x.name === name); if (same) id = same.id; }
+  const ok = form.dataset.smode === 'edit'
+    ? await run('supplyUpdate', Object.assign({ id }, p), '已儲存')
+    : await run('supplyNeed', Object.assign({ id: id || '' }, p), '已加入：' + name);
+  if (ok) closeSheet();
+}
+
+function openContactForm(c) {
+  openSheet(
+    '<h2>' + (c ? '編輯聯絡人' : '新增聯絡人') + '</h2>' +
+    '<form id="contactForm" data-id="' + (c ? esc(c.id) : '') + '">' +
+    '<div class="field"><label for="cName">名字</label><input class="input" id="cName" maxlength="40" placeholder="例如：監理站 陳小姐" value="' + esc(c ? c.name : '') + '" required></div>' +
+    '<div class="field"><label for="cPhone">電話</label><input class="input" id="cPhone" type="tel" maxlength="30" placeholder="例如：0912-345-678" value="' + esc(c ? c.phone : '') + '" required></div>' +
+    '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" type="submit">' + (c ? '儲存' : '新增') + '</button></div>' +
+    '</form>'
+  );
+  if (!c) setTimeout(() => $('cName').focus(), 250);
+}
+
+async function submitContact(e) {
+  e.preventDefault();
+  const id = $('contactForm').dataset.id;
+  const p = { name: $('cName').value.trim(), phone: $('cPhone').value.trim() };
+  if (!p.name || !p.phone) return toast('請填名字和電話');
+  const ok = id ? await run('contactUpdate', Object.assign({ id }, p), '已儲存') : await run('contactAdd', p, '已新增：' + p.name);
+  if (ok) closeSheet();
+}
+
+function openContact(c) {
+  const hist = (c.history || []).slice().reverse();
+  openSheet(
+    '<h2>' + esc(c.name) + '</h2>' +
+    '<div class="contact-line" style="margin:-6px 0 16px"><span class="tel" style="font-size:16px">' + esc(c.phone) + '</span><a class="call" href="' + telHref(c.phone) + '">撥打</a></div>' +
+    '<div class="section-title">聯絡紀錄</div>' +
+    (hist.length ? hist.map((h) => '<div class="history"><div class="d">' + esc(h.date) + '・' + esc(h.todo) + '</div><div class="r">' + esc(h.result || '（沒有寫結果）') + '</div></div>').join('')
+                 : '<p class="hint" style="margin:0 0 16px">還沒有紀錄。辦公室待辦勾完成時寫的聯絡結果，會出現在這裡。</p>') +
+    '<div class="menu-list" style="margin-top:12px">' +
+    '<button data-act="contactEdit">✏️　編輯名字或電話</button>' +
+    '<button class="danger" data-act="contactDelete">🗑️　刪除聯絡人</button>' +
+    '<button data-act="close">關閉</button></div>'
+  );
+  $('sheetBody').dataset.cid = c.id;
 }
 
 function openMenu(item) {
@@ -467,134 +723,272 @@ function openMenu(item) {
   $('sheetBody').dataset.id = item.id;
 }
 
+function openSupplyMenu(sup) {
+  openSheet(
+    '<h2>' + esc(sup.name) + '</h2><div class="menu-list">' +
+    '<button data-act="supplyEdit">✏️　改數量或店家</button>' +
+    '<button data-act="boughtFromMenu">✅　買到了</button>' +
+    '<button class="danger" data-act="supplyDelete">🗑️　刪除（以後不會出現在常買）</button>' +
+    '<button data-act="close">取消</button></div>'
+  );
+  $('sheetBody').dataset.sid = sup.id;
+}
+
 function openSettings() {
-  const block = (type, hint) =>
-    '<div class="field"><div class="section-title">' + type + '的預設提醒時間</div>' +
-    '<div class="times" data-type="' + type + '">' + state.defaults[type].map(timeItem).join('') +
+  const block = (type, title, hint) =>
+    '<div class="field"><div class="section-title">' + title + '</div>' +
+    '<div class="times" data-type="' + type + '">' + (state.defaults[type] || []).map(timeItem).join('') +
     '<button class="add-time" type="button" data-act="addTime2">＋ 時間</button></div>' +
     '<div class="hint">' + hint + '</div>' +
-    '<label class="switch" style="margin-top:10px"><input type="checkbox" data-apply="' + type + '" checked> 同時套用到目前所有' + type + '</label></div>';
+    '<label class="switch" style="margin-top:10px"><input type="checkbox" data-apply="' + type + '" checked> 同時套用到目前所有' + title.replace('的預設提醒時間', '') + '</label></div>';
   openSheet(
-    '<h2>預設提醒時間</h2>' +
-    block('待辦', '新增待辦沒改時間就用這組') +
-    block('專案', '新增專案沒改時間就用這組') +
+    '<h2>提醒時間設定</h2>' +
+    block('待辦', '待辦的預設提醒時間', '新增待辦沒改時間就用這組') +
+    block('專案', '專案的預設提醒時間', '新增專案沒改時間就用這組') +
+    block('辦公', '辦公室待辦的預設提醒時間', '新增辦公室待辦沒改時間就用這組') +
+    '<div class="field"><div class="section-title">消耗品每天提醒</div>' +
+    '<input class="input" type="time" id="supplyTimeInput" value="' + esc(state.supplyTime) + '" style="max-width:180px">' +
+    '<div class="hint">有缺的東西才會提醒</div></div>' +
     '<div class="actions"><button type="button" class="btn" data-act="close">取消</button><button class="btn primary" data-act="saveSettings">儲存</button></div>'
   );
 }
 
 async function saveSettings(btn) {
   btn.disabled = true; btn.textContent = '儲存中…';
-  for (const type of ['待辦', '專案']) {
+  const reset = () => { btn.disabled = false; btn.textContent = '儲存'; };
+  for (const type of ['待辦', '專案', '辦公']) {
     const times = [...document.querySelectorAll('.times[data-type="' + type + '"] input')].map((i) => i.value).filter(Boolean);
-    if (!times.length) { toast(type + '至少要一個時間'); btn.disabled = false; btn.textContent = '儲存'; return; }
+    if (!times.length) { toast('每一種都至少要一個時間'); return reset(); }
     const applyAll = document.querySelector('[data-apply="' + type + '"]').checked;
-    const ok = await run('setDefaults', { type, times, applyAll });
-    if (!ok) { btn.disabled = false; btn.textContent = '儲存'; return; }
+    if (!(await run('setDefaults', { type, times, applyAll }))) return reset();
   }
+  const st = $('supplyTimeInput').value;
+  if (st && !(await run('setSupplyTime', { time: st }))) return reset();
   closeSheet();
-  toast('預設時間已更新');
+  toast('提醒時間已更新');
 }
 
-/* ---------- 完成 / 刪除 ---------- */
-async function complete(id, cardEl) {
-  if (cardEl) {
-    cardEl.querySelector('.check').classList.add('done');
-    cardEl.classList.add('leaving');
-  }
+/* ---------- 完成／刪除：都先確認，做完可以復原 ---------- */
+async function complete(id) {
   const item = state.items.find((i) => i.id === id);
-  await run('complete', { id }, '👍 已完成：' + (item ? item.content : ''));
+  if (!item) return;
+  const c = item.type === '辦公' ? contactOf(item.contactId) : null;
+  const ans = await askConfirm({
+    title: '完成這件事？', text: item.content, ok: '完成',
+    extra: c ? '<div class="field"><label for="cfmResult">跟 ' + esc(c.name) + ' 聯絡的結果（可以不填）</label>' +
+      '<textarea class="input" id="cfmResult" maxlength="300" placeholder="例如：說下週三前會付款"></textarea></div>' : ''
+  });
+  if (!ans) return;
+  await run('complete', { id, result: ans.result }, '👍 已完成：' + item.content, () => run('restore', { id }, '已復原：' + item.content));
 }
 
 async function remove(id) {
   const item = state.items.find((i) => i.id === id);
-  if (!confirm('確定要刪除「' + (item ? item.content : '') + '」？')) return;
-  closeSheet();
-  await run('delete', { id }, '已刪除');
+  if (!item) return;
+  const ans = await askConfirm({ title: '刪除這件事？', text: item.content, ok: '刪除', danger: true });
+  if (!ans) return;
+  await run('delete', { id }, '已刪除：' + item.content, () => run('restore', { id }, '已復原：' + item.content));
 }
 
-/* ---------- 提示 ---------- */
-let toastTimer;
-function toast(text) {
+async function bought(sid) {
+  const s = state.supplies.find((x) => x.id === sid);
+  if (!s) return;
+  const ans = await askConfirm({ title: '買到了嗎？', text: s.name + (s.qty ? '（' + s.qty + '）' : ''), ok: '買到了' });
+  if (!ans) return;
+  await run('supplyBought', { id: sid }, '👍 已買：' + s.name, () => run('supplyNeed', { id: sid, name: s.name, qty: s.qty, store: s.store }, '已放回清單：' + s.name));
+}
+
+async function supplyDelete(sid) {
+  const s = state.supplies.find((x) => x.id === sid);
+  if (!s) return;
+  const ans = await askConfirm({ title: '刪除這個消耗品？', text: s.name + '（刪除後不會出現在常買的東西）', ok: '刪除', danger: true });
+  if (!ans) return;
+  await run('supplyDelete', { id: sid }, '已刪除：' + s.name, () => run('supplyUndelete', { id: sid }, '已復原：' + s.name));
+}
+
+async function contactDelete(cid) {
+  const c = contactOf(cid);
+  if (!c) return;
+  const ans = await askConfirm({ title: '刪除聯絡人？', text: c.name + '　' + c.phone, ok: '刪除', danger: true });
+  if (!ans) return;
+  await run('contactDelete', { id: cid }, '已刪除：' + c.name, () => run('contactUndelete', { id: cid }, '已復原：' + c.name));
+}
+
+/* ---------- 提示（可以帶「復原」） ---------- */
+let toastTimer, toastUndo = null;
+function toast(text, undo) {
   $('toastText').textContent = text;
+  toastUndo = undo || null;
+  $('toastAction').hidden = !undo;
   $('toast').classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => { $('toast').classList.remove('show'); toastUndo = null; }, undo ? 6000 : 2600);
 }
+$('toastAction').addEventListener('click', () => {
+  const u = toastUndo; toastUndo = null;
+  $('toast').classList.remove('show');
+  if (u) u();
+});
 
 /* ---------- 事件 ---------- */
 document.addEventListener('click', (e) => {
+  const mode = e.target.closest('.modes [data-mode]');
+  if (mode) { state.mode = mode.dataset.mode; render(); window.scrollTo(0, 0); return; }
   const tab = e.target.closest('[data-tab]');
-  if (tab) { state.tab = tab.dataset.tab; render(); window.scrollTo(0, 0); return; }
+  if (tab) { state.tab[state.mode] = tab.dataset.tab; render(); window.scrollTo(0, 0); return; }
 
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
   const card = el.closest('.card');
-  const id = card ? card.dataset.id : $('sheetBody').dataset.id;
+  const id = card && card.dataset.id ? card.dataset.id : $('sheetBody').dataset.id;
+  const sid = el.dataset.sid || (card && card.dataset.sid) || $('sheetBody').dataset.sid;
+  const cid = (card && card.dataset.cid) || $('sheetBody').dataset.cid;
   const item = state.items.find((i) => i.id === id);
+  const sup = state.supplies.find((x) => x.id === sid);
 
-  if (act === 'done') complete(id, card);
+  if (act === 'cfmYes') finishConfirm(true);
+  else if (act === 'cfmNo') finishConfirm(false);
+  else if (act === 'done') complete(id);
   else if (act === 'menu') openMenu(item);
   else if (act === 'edit') openForm(item);
-  else if (act === 'doneFromMenu') { closeSheet(); complete(id, document.querySelector('.card[data-id="' + CSS.escape(id) + '"]')); }
-  else if (act === 'delete') remove(id);
+  else if (act === 'doneFromMenu') { closeSheet(); complete(id); }
+  else if (act === 'delete') { closeSheet(); remove(id); }
   else if (act === 'close') closeSheet();
   else if (act === 'setType') updateFormType(el.dataset.type, true);
+  else if (act === 'setHow') {
+    $('officeForm').dataset.how = el.dataset.how;
+    document.querySelectorAll('[data-act="setHow"]').forEach((b) => b.setAttribute('aria-pressed', b === el));
+    $('howContact').hidden = el.dataset.how !== 'contact';
+  }
   else if (act === 'addTime' || act === 'addTime2') el.insertAdjacentHTML('beforebegin', timeItem('12:00'));
   else if (act === 'rmTime') el.closest('.time-item').remove();
   else if (act === 'saveSettings') saveSettings(el);
+  else if (act === 'bought') bought(sid);
+  else if (act === 'boughtFromMenu') { closeSheet(); bought(sid); }
+  else if (act === 'supplyMenu') openSupplyMenu(sup);
+  else if (act === 'supplyEdit') openSupplyForm(sup, 'edit');
+  else if (act === 'supplyDelete') { closeSheet(); supplyDelete(sid); }
+  else if (act === 'readd') openSupplyForm(sup, 'readd');
+  else if (act === 'contactOpen') openContact(contactOf(cid));
+  else if (act === 'contactEdit') openContactForm(contactOf(cid));
+  else if (act === 'contactDelete') { closeSheet(); contactDelete(cid); }
 });
-document.addEventListener('submit', (e) => { if (e.target.id === 'form') submitForm(e); });
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'oContact') $('newContact').hidden = e.target.value !== '__new';
+  if (e.target.id === 'sName' && $('supplyForm').dataset.smode === 'new') {
+    const same = state.supplies.find((x) => x.name === e.target.value.trim());
+    if (same) { if (!$('sQty').value) $('sQty').value = same.qty || ''; if (!$('sStore').value) $('sStore').value = same.store || ''; }
+  }
+});
+document.addEventListener('submit', (e) => {
+  if (e.target.id === 'form') submitForm(e);
+  else if (e.target.id === 'officeForm') submitOffice(e);
+  else if (e.target.id === 'supplyForm') submitSupply(e);
+  else if (e.target.id === 'contactForm') submitContact(e);
+});
 $('scrim').addEventListener('click', closeSheet);
-$('addBtn').addEventListener('click', () => openForm(null));
+$('addBtn').addEventListener('click', () => {
+  const t = curTab();
+  if (t === '消耗品') openSupplyForm(null);
+  else if (t === '聯絡人') openContactForm(null);
+  else openForm(null);
+});
 $('settingsBtn').addEventListener('click', openSettings);
 
 /* ---------- 示範模式（網址加 ?demo 可以先看畫面） ---------- */
 const demo = (() => {
   const d = (n) => { const x = new Date(Date.now() + n * 86400000); return x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate()); };
-  let seq = 10;
+  let seq = 100;
   return {
-    seq: () => 'demo' + (++seq),
+    d, seq: () => 'demo' + (++seq),
     items: [
       { id: 'd1', type: '待辦', content: '交季報給中部', times: ['09:30', '13:00', '19:00'], dt: d(3), created: d(-2) },
-      { id: 'd2', type: '待辦', content: '客戶車牌選號資料回覆', times: ['09:30', '13:00', '19:00'], dt: d(0), created: d(-1) },
-      { id: 'd3', type: '待辦', content: '寄合約', times: ['09:30', '13:00', '19:00'], dt: d(-2), created: d(-6) },
+      { id: 'd2', type: '待辦', content: '繳停車費', times: ['09:30', '13:00', '19:00'], dt: d(0), created: d(-1) },
       { id: 'd4', type: '專案', content: '雷彫機軟體', times: ['09:00', '17:00'], dt: '', created: d(-12) },
       { id: 'd5', type: '每天', content: '吃藥', times: ['08:00', '21:00'], dt: '', created: d(-20) },
-      { id: 'd6', type: '一次', content: '去監理站', times: [], dt: d(1) + ' 14:00', created: d(0) }
+      { id: 'd6', type: '一次', content: '去監理站', times: [], dt: d(1) + ' 14:00', created: d(0) },
+      { id: 'o1', type: '辦公', content: '確認牌照送件進度', times: ['09:00', '13:00', '18:00'], dt: d(1), created: d(-1), contactId: 'c1' },
+      { id: 'o2', type: '辦公', content: '回覆客戶交車時間', times: ['09:00', '13:00', '18:00'], dt: d(-1), created: d(-4), contactId: 'c2' },
+      { id: 'o3', type: '辦公', content: '整理本月代辦收據', times: ['09:00', '13:00', '18:00'], dt: d(4), created: d(0), contactId: '' }
     ],
-    defaults: { '待辦': ['09:30', '13:00', '19:00'], '專案': ['09:00', '17:00'] }
+    contacts: [
+      { id: 'c1', name: '監理站 陳小姐', phone: '06-000-1234', history: [] },
+      { id: 'c2', name: '王先生（客戶）', phone: '0900-000-111', history: [{ date: d(-6), todo: '確認選號', result: '選好了，下週交件' }] },
+      { id: 'c3', name: '文具行 林老闆', phone: '06-000-5678', history: [] }
+    ],
+    supplies: [
+      { id: 's1', name: '影印紙 A4', qty: '2 箱', store: '全聯', status: '缺' },
+      { id: 's2', name: '碳粉匣', qty: '1 盒', store: '燦坤', status: '缺' },
+      { id: 's3', name: '原子筆（藍）', qty: '1 盒', store: '文具行', status: '缺' },
+      { id: 's4', name: '透明膠帶', qty: '3 卷', store: '文具行', status: '買了' },
+      { id: 's5', name: '衛生紙', qty: '1 串', store: '全聯', status: '買了' },
+      { id: 's6', name: '牌照封套', qty: '100 個', store: '印刷廠', status: '買了' }
+    ],
+    trash: { items: {}, supplies: {}, contacts: {} },
+    defaults: { '待辦': ['09:30', '13:00', '19:00'], '專案': ['09:00', '17:00'], '辦公': ['09:00', '13:00', '18:00'] },
+    supplyTime: '17:30'
   };
 })();
 async function demoApi(action, p) {
-  await new Promise((r) => setTimeout(r, 250));
-  const find = (id) => demo.items.findIndex((i) => i.id === id);
-  if (action === 'add') demo.items.push({ id: demo.seq(), type: p.type, content: p.content, times: p.times || [], dt: p.type === '待辦' ? p.deadline : (p.dt || ''), created: todayStr() });
-  if (action === 'complete' || action === 'delete') demo.items.splice(find(p.id), 1);
+  await new Promise((r) => setTimeout(r, 200));
+  const D = demo;
+  const fi = (arr, id) => arr.findIndex((x) => x.id === id);
+  const take = (arr, bin, id) => { const i = fi(arr, id); if (i >= 0) { bin[id] = arr[i]; arr.splice(i, 1); } };
+  const putBack = (arr, bin, id) => { if (bin[id]) { arr.push(bin[id]); delete bin[id]; } };
+  let cid = p.contactId;
+  if ((action === 'add' || action === 'update') && p.newContact) {
+    cid = D.seq(); D.contacts.push({ id: cid, name: p.newContact.name, phone: p.newContact.phone, history: [] });
+  }
+  if (action === 'add') D.items.push({ id: D.seq(), type: p.type, content: p.content, times: p.times || [], dt: p.type === '待辦' || p.type === '辦公' ? p.deadline : (p.dt || ''), created: todayStr(), contactId: cid || '' });
   if (action === 'update') {
-    const it = demo.items[find(p.id)];
+    const it = D.items[fi(D.items, p.id)];
     it.content = p.content;
     if (p.times) it.times = p.times;
     if (p.deadline) it.dt = p.deadline;
     if (p.dt) it.dt = p.dt;
+    if (it.type === '辦公') it.contactId = cid || '';
+  }
+  if (action === 'complete') {
+    const it = D.items[fi(D.items, p.id)];
+    const c = it && D.contacts.find((x) => x.id === it.contactId);
+    if (c) { c.history.push({ date: todayStr(), todo: it.content, result: p.result || '', itemId: it.id }); }
+    take(D.items, D.trash.items, p.id);
+  }
+  if (action === 'delete') take(D.items, D.trash.items, p.id);
+  if (action === 'restore') {
+    const it = D.trash.items[p.id];
+    const c = it && D.contacts.find((x) => x.id === it.contactId);
+    if (c) c.history = c.history.filter((h) => h.itemId !== p.id);
+    putBack(D.items, D.trash.items, p.id);
   }
   if (action === 'setDefaults') {
-    demo.defaults[p.type] = p.times;
-    if (p.applyAll) demo.items.filter((i) => i.type === p.type).forEach((i) => { i.times = p.times.slice(); });
+    D.defaults[p.type] = p.times;
+    if (p.applyAll) D.items.filter((i) => i.type === p.type).forEach((i) => { i.times = p.times.slice(); });
   }
-  return { items: JSON.parse(JSON.stringify(demo.items)), defaults: JSON.parse(JSON.stringify(demo.defaults)) };
+  if (action === 'setSupplyTime') D.supplyTime = p.time;
+  if (action === 'supplyNeed') {
+    let s = p.id && D.supplies.find((x) => x.id === p.id);
+    if (!s) { s = { id: D.seq(), name: p.name }; D.supplies.push(s); }
+    Object.assign(s, { qty: p.qty, store: p.store, status: '缺' });
+  }
+  if (action === 'supplyUpdate') Object.assign(D.supplies[fi(D.supplies, p.id)], { name: p.name, qty: p.qty, store: p.store });
+  if (action === 'supplyBought') D.supplies[fi(D.supplies, p.id)].status = '買了';
+  if (action === 'supplyDelete') take(D.supplies, D.trash.supplies, p.id);
+  if (action === 'supplyUndelete') putBack(D.supplies, D.trash.supplies, p.id);
+  if (action === 'contactAdd') D.contacts.push({ id: D.seq(), name: p.name, phone: p.phone, history: [] });
+  if (action === 'contactUpdate') Object.assign(D.contacts[fi(D.contacts, p.id)], { name: p.name, phone: p.phone });
+  if (action === 'contactDelete') take(D.contacts, D.trash.contacts, p.id);
+  if (action === 'contactUndelete') putBack(D.contacts, D.trash.contacts, p.id);
+  const copy = (x) => JSON.parse(JSON.stringify(x));
+  return { items: copy(D.items), supplies: copy(D.supplies), contacts: copy(D.contacts), defaults: copy(D.defaults), supplyTime: D.supplyTime };
 }
 
 /* ---------- 啟動 ---------- */
 (async function init() {
   try {
-    if (DEMO) {
-      $('demoBar').hidden = false;
-    } else {
-      takeKeyFromLink();
-    }
-    const tab = new URLSearchParams(location.search).get('tab');
-    if (tab && TYPES.some((t) => t.key === tab)) state.tab = tab;
+    if (DEMO) $('demoBar').hidden = false;
+    else takeKeyFromLink();
     apply(await api('list'));
   } catch (e) {
     if (e && e.message === 'NO_KEY') { showNeedKey(); return; }
@@ -603,11 +997,11 @@ async function demoApi(action, p) {
   }
 })();
 // 讓手機可以把 App 安裝到桌面
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !DEMO) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
-// 回到畫面時更新一次（例如從 LINE 切回來）
-document.addEventListener('visibilitychange', () => { if (!document.hidden && state.loaded) api('list').then(apply).catch(() => {}); });
+// 回到畫面時更新一次
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state.loaded && !DEMO) api('list').then(apply).catch(() => {}); });
 </script>
 </body>
 </html>
