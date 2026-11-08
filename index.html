@@ -15,9 +15,8 @@
 <meta name="apple-mobile-web-app-title" content="超級管家">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
-<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
-  /* ===== 超級管家 App（LIFF） ===== */
+  /* ===== 超級管家 App ===== */
   :root {
     --bg: #F7F3EA;
     --card: #FFFFFF;
@@ -213,12 +212,11 @@
 <script>
 /* ======================= 設定（照教學填） ======================= */
 const CONFIG = {
-  LIFF_ID: '2012447607-M4Bjtb5T',   // 已填好
   API_URL: 'https://script.google.com/macros/s/AKfycbxbmnz9R-eJ1H4SnGerEPbqFNY4-d89jNUIkTb3sqjb7YSZe8fqMT66KPXjxG3nKxpl/exec'    // Apps Script 網頁應用程式網址（已填好）
 };
 /* =============================================================== */
 
-const DEMO = !CONFIG.LIFF_ID || !CONFIG.API_URL || new URLSearchParams(location.search).has('demo');
+const DEMO = !CONFIG.API_URL || new URLSearchParams(location.search).has('demo');
 const TYPES = [
   { key: '待辦', label: '待辦', color: 'var(--todo)' },
   { key: '專案', label: '專案', color: 'var(--project)' },
@@ -272,40 +270,41 @@ function sortKey(it) {
 }
 
 /* ---------- 登入 ---------- */
-/** 登入憑證（約 30 天有效）；沒有的話重新登入 */
-function accessToken() {
-  const t = liff.getAccessToken();
-  if (t) {
-    try { sessionStorage.removeItem('relogin'); } catch (e) {}
-    return t;
-  }
-  relogin(false);
-  throw new Error('登入中，請稍候…');
+/** 專屬鑰匙：從 LINE 的「打開超級管家」連結帶進來，存在這支手機上，之後不用再經過 LINE */
+const KEY_NAME = 'sb_key';
+function takeKeyFromLink() {
+  const m = location.hash.match(/k=([0-9a-f]{64})/);
+  if (!m) return;
+  try { localStorage.setItem(KEY_NAME, m[1]); } catch (e) {}
+  history.replaceState(null, '', location.pathname);
 }
-/** 重新登入；hard=true 代表憑證被 LINE 拒絕，要先清掉舊的 */
-function relogin(hard) {
-  let tried = false;
-  try { tried = sessionStorage.getItem('relogin') === '1'; sessionStorage.setItem('relogin', '1'); } catch (e) {}
-  if (tried) throw new Error('登入失敗，請關掉 App 重新打開');
-  if (liff.isInClient()) {
-    location.reload();
-    return;
-  }
-  if (hard && liff.isLoggedIn()) liff.logout();
-  liff.login({ redirectUri: location.origin + location.pathname });
+function appKey() {
+  let k = null;
+  try { k = localStorage.getItem(KEY_NAME); } catch (e) {}
+  if (!k) throw new Error('NO_KEY');
+  return k;
+}
+function showNeedKey(msg) {
+  state.loaded = true;
+  $('list').innerHTML = '<div class="empty"><b>' + esc(msg || '還沒連結你的帳號') + '</b>' +
+    '請到 LINE 的「超級管家」，按下面的「打開超級管家」，<br>會用瀏覽器打開你的專屬 App。<br><br>' +
+    '打開之後就可以「安裝到桌面」，<br>以後直接點桌面圖示，不會再經過 LINE。</div>';
 }
 
 /* ---------- 和後端溝通 ---------- */
 async function api(action, params) {
   if (DEMO) return demoApi(action, params || {});
-  const token = accessToken();
+  const key = appKey();
   const res = await fetch(CONFIG.API_URL, {
     method: 'POST',
-    body: JSON.stringify({ action, params: params || {}, accessToken: token })
+    body: JSON.stringify({ action, params: params || {}, key })
   });
   const j = await res.json();
   if (!j.ok) {
-    if (/登入已過期/.test(j.error || '')) { relogin(true); throw new Error('登入更新中，請稍候…'); }
+    if (/連結失效/.test(j.error || '')) {
+      try { localStorage.removeItem(KEY_NAME); } catch (e) {}
+      throw new Error('NO_KEY');
+    }
     throw new Error(j.error || '發生錯誤');
   }
   return j.data;
@@ -324,6 +323,7 @@ async function run(action, params, okText) {
     if (okText) toast(okText);
     return true;
   } catch (e) {
+    if (e.message === 'NO_KEY') { closeSheet(); showNeedKey('連結已失效'); return false; }
     toast('⚠️ ' + e.message);
     return false;
   }
@@ -549,7 +549,7 @@ $('scrim').addEventListener('click', closeSheet);
 $('addBtn').addEventListener('click', () => openForm(null));
 $('settingsBtn').addEventListener('click', openSettings);
 
-/* ---------- 示範模式（還沒設定 LIFF 時可以先看畫面） ---------- */
+/* ---------- 示範模式（網址加 ?demo 可以先看畫面） ---------- */
 const demo = (() => {
   const d = (n) => { const x = new Date(Date.now() + n * 86400000); return x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate()); };
   let seq = 10;
@@ -591,13 +591,13 @@ async function demoApi(action, p) {
     if (DEMO) {
       $('demoBar').hidden = false;
     } else {
-      await liff.init({ liffId: CONFIG.LIFF_ID, withLoginOnExternalBrowser: true });
-      if (!liff.isLoggedIn()) { liff.login({ redirectUri: location.origin + location.pathname }); return; }
+      takeKeyFromLink();
     }
     const tab = new URLSearchParams(location.search).get('tab');
     if (tab && TYPES.some((t) => t.key === tab)) state.tab = tab;
     apply(await api('list'));
   } catch (e) {
+    if (e && e.message === 'NO_KEY') { showNeedKey(); return; }
     state.loaded = true;
     $('list').innerHTML = '<div class="empty"><b>打不開 😥</b>' + esc(e.message || e) + '<br><br>請關掉後重新打開；還是不行就截圖給管理者</div>';
   }
